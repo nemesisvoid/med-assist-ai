@@ -1,0 +1,341 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =====================================================
+// ENUMS
+// =====================================================
+
+enum Role {
+  PATIENT
+  DOCTOR
+  ADMIN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum AppointmentStatus {
+  PENDING_INTAKE
+  READY_FOR_REVIEW
+  ASSIGNED
+  IN_PROGRESS
+  NOTES_GENERATED
+  FOLLOW_UP_REQUIRED
+  COMPLETED
+  CANCELLED
+}
+
+enum AppointmentPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum SeverityLevel {
+  LOW
+  MODERATE
+  HIGH
+  SEVERE
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum NotificationType {
+  APPOINTMENT
+  INTAKE_FORM
+  FOLLOW_UP
+  SYSTEM
+  CLINICAL_NOTE
+  MESSAGE
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+}
+
+enum DoctorAvailabilityStatus {
+  AVAILABLE
+  BUSY
+  OFFLINE
+  ON_LEAVE
+}
+
+model User {
+  id            String    @id
+  name          String
+  email         String
+  emailVerified Boolean   @default(false)
+  image         String?
+  role          Role      @default(PATIENT)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+
+  // Profiles
+  patientProfile PatientProfile?
+  doctorProfile  DoctorProfile?
+
+  // Notifications
+  notifications Notification[]
+
+  // Appointments
+  patientAppointments Appointment[] @relation("PatientAppointments")
+  doctorAppointments  Appointment[] @relation("DoctorAppointments")
+
+  // Clinical Notes
+  createdClinicalNotes ClinicalNote[] @relation("DoctorClinicalNotes")
+
+  sentMessages     Message[] @relation("MessageSender")
+  receivedMessages Message[] @relation("MessageReceiver")
+  messages         Message[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model PatientProfile {
+  id                  String @id @default(cuid())
+  userId              String @unique
+  medicalRecordNumber String @unique
+
+  dateOfBirth DateTime?
+  gender      Gender
+  imageUrl    String?
+
+  genotype          String
+  bloodGroup        String
+  allergies         String?
+  medications       String?
+  medicalHistory    String?
+  emergencyContact  String?
+  insuranceProvider String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DoctorProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  specialty         String
+  licenseNumber     String?
+  yearsOfExperience Int?
+  bio               String?
+  imageUrl          String?
+
+  availabilityStatus DoctorAvailabilityStatus @default(AVAILABLE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Appointment {
+  id String @id @default(cuid())
+
+  patientId String
+  doctorId  String?
+
+  title             String?
+  appointmentReason String
+  appointmentType   String
+  symptoms          String?
+
+  scheduledAt     DateTime
+  scheduledTime   String?
+  durationMinutes Int?
+
+  status AppointmentStatus @default(PENDING_INTAKE)
+
+  priority      AppointmentPriority @default(MEDIUM)
+  severityLevel SeverityLevel?
+  riskLevel     RiskLevel?
+
+  aiRiskSummary    String?
+  aiRecommendation String?
+
+  requiresFollowUp Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  patient User  @relation("PatientAppointments", fields: [patientId], references: [id])
+  doctor  User? @relation("DoctorAppointments", fields: [doctorId], references: [id])
+
+  intakeForm   IntakeForm?
+  clinicalNote ClinicalNote?
+
+  messages Message[]
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([status])
+  @@index([priority])
+  @@index([scheduledAt])
+}
+
+model IntakeForm {
+  id String @id @default(cuid())
+
+  appointmentId String @unique
+
+  chiefComplaint  String
+  currentSymptoms String
+
+  painLevel Int?
+
+  allergies   String?
+  medications String?
+
+  additionalNotes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+}
+
+// =====================================================
+// CLINICAL NOTES
+// =====================================================
+
+model ClinicalNote {
+  id String @id @default(cuid())
+
+  appointmentId     String @unique
+  createdByDoctorId String
+
+  subjective String?
+  objective  String?
+  assessment String?
+  plan       String?
+
+  aiGeneratedSummary String?
+
+  followUpInstructions String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  createdByDoctor User @relation("DoctorClinicalNotes", fields: [createdByDoctorId], references: [id])
+}
+
+model Message {
+  id String @id @default(cuid())
+
+  appointmentId String?
+
+  senderId   String
+  receiverId String
+
+  content String
+
+  isRead Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  sender   User @relation("MessageSender", fields: [senderId], references: [id])
+  receiver User @relation("MessageReceiver", fields: [receiverId], references: [id])
+
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+  user        User?        @relation(fields: [userId], references: [id])
+  userId      String?
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([appointmentId])
+}
+
+model Notification {
+  id String @id @default(cuid())
+
+  userId String
+
+  title   String
+  message String
+
+  type      NotificationType
+  isRead    Boolean              @default(false)
+  channel   NotificationChannel? @default(IN_APP)
+  link      String?
+  createdAt DateTime             @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
