@@ -42,6 +42,29 @@ export const patientSidebarLinks = [
   },
 ];
 
+export const doctorSidebarLinks = [
+  {
+    name: 'Dashboard',
+    href: '/doctor/dashboard',
+    icon: HomeIcon,
+  },
+  {
+    name: 'Appointments',
+    href: '/doctor/appointment',
+    icon: CalendarIcon,
+  },
+  {
+    name: 'Notifications',
+    href: '/doctor/notification',
+    icon: BellIcon,
+  },
+  {
+    name: 'Messages',
+    href: '/doctor/messages',
+    icon: MessageSquareIcon,
+  },
+];
+
 export const VISIT_TYPE = [
   {
     name: 'Follow up',

@@ -19,17 +19,34 @@ type Appointments = {
 type PatientAppointmentsListProps = {
   appointments: Appointments[];
   isPatient: 'PATIENT' | 'DOCTOR';
+  isCard?: boolean;
 };
-const AppointmentsList = ({ appointments, isPatient }: PatientAppointmentsListProps) => {
+const AppointmentsList = ({ appointments, isPatient, isCard = false }: PatientAppointmentsListProps) => {
   if (appointments.length === 0)
     return <div className='text-lg font-medium flex items-center justify-center h-50'>You do not have any appointments</div>;
   const isPastAppointments = appointments.filter(item => isPast(item.scheduledAt));
   const upcomingAppointments = appointments.filter(item => isFuture(item.scheduledAt));
   console.log(appointments);
   console.log(upcomingAppointments);
-  return (
+  return isCard ? (
+    <div className='flex flex-col gap-4'>
+      {upcomingAppointments.map(item => (
+        <AppointmentCard
+          appointmentId={item.appointmentId}
+          title={item.appointmentType}
+          scheduledDate={item.scheduledAt}
+          scheduledTime={item.scheduledTime}
+          doctor={item.doctor}
+          key={item.appointmentId}
+          isPatient={isPatient}
+          date={item.scheduledAt}
+          intakeFormId={item.intakeFormId}
+        />
+      ))}
+    </div>
+  ) : (
     <div>
-      <div className=''>
+      <div>
         <Tabs
           defaultValue='upcoming'
           className='w-1/2'>
@@ -39,36 +56,43 @@ const AppointmentsList = ({ appointments, isPatient }: PatientAppointmentsListPr
               value='upcoming'>
               Upcoming
             </TabsTrigger>
+
             <TabsTrigger
               className='text-lg font-medium'
               value='past'>
               Past
             </TabsTrigger>
           </TabsList>
+
           <TabsContent value='upcoming'>
-            {upcomingAppointments.map(item => (
-              <AppointmentCard
-                appointmentId={item.appointmentId}
-                title={item.appointmentType}
-                scheduledDate={item.scheduledAt}
-                scheduledTime={item.scheduledTime}
-                doctor={item.doctor}
-                key={item.appointmentId}
-                isPatient={isPatient}
-                date={item.scheduledAt}
-                intakeFormId={item.intakeFormId}
-              />
-            ))}
+            <div className='flex flex-col gap-4'>
+              {upcomingAppointments.map(item => (
+                <AppointmentCard
+                  appointmentId={item.appointmentId}
+                  title={item.appointmentType}
+                  scheduledDate={item.scheduledAt}
+                  scheduledTime={item.scheduledTime}
+                  doctor={item.doctor}
+                  key={item.appointmentId}
+                  isPatient={isPatient}
+                  date={item.scheduledAt}
+                  intakeFormId={item.intakeFormId}
+                />
+              ))}
+            </div>
           </TabsContent>
+
           <TabsContent value='past'>
-            {isPastAppointments.map(item => (
-              <AppointmentCard
-                key={item.appointmentId}
-                isPatient={isPatient}
-                date={item.scheduledAt}
-                intakeFormId={item.intakeFormId}
-              />
-            ))}
+            <div className='flex flex-col gap-4'>
+              {isPastAppointments.map(item => (
+                <AppointmentCard
+                  key={item.appointmentId}
+                  isPatient={isPatient}
+                  date={item.scheduledAt}
+                  intakeFormId={item.intakeFormId}
+                />
+              ))}
+            </div>
           </TabsContent>
         </Tabs>
       </div>

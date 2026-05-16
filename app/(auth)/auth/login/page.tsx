@@ -36,12 +36,12 @@ const LoginPage = () => {
             </div>
 
             <div className='flex items-center gap-3'>
-              <ShieldIcon />
+              <StarsIcon className='text-white size-5' />
               <p className='text-white/80 text-sm'>AI risk analysis on every appointment</p>
             </div>
 
             <div className='flex items-center gap-3'>
-              <HeartIcon />
+              <HeartIcon className='text-white size-5' />
               <p className='text-white/80 text-sm'>Personalized, continuous health tracking</p>
             </div>
           </div>

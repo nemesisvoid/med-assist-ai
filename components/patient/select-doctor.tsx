@@ -176,21 +176,6 @@ const SelectDoctor = ({ form }: SelectDoctorProps) => {
                         <p className='text-[13px] text-slate-500 line-clamp-2 mb-3 leading-relaxed'>
                           {profile?.bio || 'Specialist dedicated to providing comprehensive and compassionate care.'}
                         </p>
-
-                        {/* Ratings */}
-                        <div className='flex items-center gap-1 mt-auto'>
-                          <div className='flex text-amber-400'>
-                            {[...Array(5)].map((_, i) => (
-                              <Star
-                                key={i}
-                                size={14}
-                                fill='currentColor'
-                              />
-                            ))}
-                          </div>
-                          <span className='text-[13px] font-bold text-slate-700 ml-1'>{mockRating}</span>
-                          <span className='text-[12px] text-slate-400'>({mockReviews} reviews)</span>
-                        </div>
                       </div>
                     </button>
                   );

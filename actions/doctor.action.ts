@@ -80,3 +80,12 @@ export const searchDoctors = async query => {
     throw error;
   }
 };
+
+export const getDoctorsAppointments = async (doctorId: string) => {
+  const res = await prisma.appointment.findMany({
+    where: {
+      doctorId: doctorId,
+    },
+  });
+  return res;
+};
