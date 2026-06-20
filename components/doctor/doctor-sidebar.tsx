@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { LogOut } from 'lucide-react';
-import { authClient } from '@/lib/auth-client';
+import { authClient } from '@/lib/auth.client';
 
 import {
   Sidebar,
@@ -18,11 +18,12 @@ import {
 import { doctorSidebarLinks } from '@/constants';
 import { MedAssistLogo } from '../med-assist-logo';
 
-const DoctorSidebar = () => {
+const DoctorSidebar = ({ unread }: { unread: number }) => {
   const pathname = usePathname();
   const router = useRouter();
   const { state } = useSidebar();
   const isCollapsed = state === 'collapsed';
+  console.log('item', doctorSidebarLinks);
 
   const handleSignOut = async () => {
     await authClient.signOut({
@@ -38,24 +39,21 @@ const DoctorSidebar = () => {
     <Sidebar
       collapsible='icon'
       className='border-r border-slate-100 bg-white'>
+      {/* Restructured Header with explicit spacing separation */}
       <SidebarHeader
         className={
-          isCollapsed ? 'p-2 flex justify-center items-center h-16' : 'px-6 h-16 flex items-center justify-between border-b border-slate-50 mb-4'
+          isCollapsed ? 'p-2 flex justify-center items-center h-16' : 'px-6 h-16 flex items-center justify-between border-b border-slate-50 mb-2'
         }>
         <MedAssistLogo isCollapsed={isCollapsed} />
-        {!isCollapsed && (
-          <span className='bg-blue-50 text-blue-700 text-[10px] font-bold tracking-wider px-2 py-0.5 rounded uppercase border border-blue-100'>
-            MD
-          </span>
-        )}
       </SidebarHeader>
 
-      <SidebarContent className='px-3 bg-white'>
+      <SidebarContent className='px-3 bg-white pt-8'>
         <SidebarMenu className='gap-1'>
           {doctorSidebarLinks.map(item => {
             const isActive = pathname?.startsWith(item.href);
             return (
               <SidebarMenuItem key={item.name}>
+                {/* Fixed semantic layout nesting by utilizing standard shadcn asChild parsing */}
                 <SidebarMenuButton
                   className={`w-full py-5.5 rounded-md transition-all ${
                     isActive
@@ -68,6 +66,12 @@ const DoctorSidebar = () => {
                     className='flex items-center gap-3.5 w-full'>
                     <item.icon className={`size-[18px] shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
                     <span className='text-[14px]'>{item.name}</span>
+
+                    {unread > 0 && item.name.includes('Notifications') && (
+                      <span className='ml-auto text-white text-[11px] font-bold bg-blue-600 rounded-full h-5 px-1.5 min-w-5 flex items-center justify-center shadow-sm shadow-blue-500/10 animate-in zoom-in-50'>
+                        {unread}
+                      </span>
+                    )}
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -76,6 +80,7 @@ const DoctorSidebar = () => {
         </SidebarMenu>
       </SidebarContent>
 
+      {/* Persistent Bottom Layout Tray for User Platform Management */}
       <SidebarFooter className='p-3 border-t border-slate-50 bg-white'>
         <SidebarMenu>
           <SidebarMenuItem>

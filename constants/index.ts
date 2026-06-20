@@ -11,6 +11,7 @@ import {
   MessageSquareIcon,
   DollarSignIcon,
   AlertCircleIcon,
+  CalendarDaysIcon,
 } from 'lucide-react';
 import { Message } from 'react-hook-form';
 
@@ -47,6 +48,11 @@ export const doctorSidebarLinks = [
     name: 'Dashboard',
     href: '/doctor/dashboard',
     icon: HomeIcon,
+  },
+  {
+    name: 'Calendar',
+    href: '/doctor/calendar',
+    icon: CalendarDaysIcon,
   },
   {
     name: 'Appointments',

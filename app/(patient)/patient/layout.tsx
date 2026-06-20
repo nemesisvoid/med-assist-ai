@@ -1,4 +1,4 @@
-import { getPatientNotifications } from '@/actions/patient.action';
+import { getUserNotifications } from '@/actions/patient.action';
 import Header from '@/components/header';
 import PatientSidebar from '@/components/patient/patient-sidebar';
 import { SidebarProvider } from '@/components/ui/sidebar';
@@ -8,7 +8,7 @@ import { redirect } from 'next/navigation';
 const PatientLayout = async ({ children }: { children: React.ReactNode }) => {
   const session = await getLoggedInUser();
   if (!session) return redirect('/auth/login');
-  const getUnreadNotifications = await getPatientNotifications(session.user.id);
+  const getUnreadNotifications = await getUserNotifications(session.user.id);
 
   const unread = getUnreadNotifications.filter(item => !item.isRead).length;
   return (

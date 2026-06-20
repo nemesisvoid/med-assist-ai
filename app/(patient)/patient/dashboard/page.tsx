@@ -1,20 +1,22 @@
-import { getPatientAppointments, getPatientProfile } from '@/actions/patient.action';
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { isFuture, isPast } from 'date-fns';
+
+import { getPatientAppointments, getPatientProfile, patientStats } from '@/actions/patient.action';
 import DashboardCard from '@/components/dashboard-card';
 import DashboardStatCard from '@/components/dashboard-stats-card';
 import PatientOnboarding from '@/components/patient/patient-onboarding';
 
-import PatientUpcomingAppointments from '@/components/patient/appointment-card';
 import { getLoggedInUser } from '@/lib/get-user';
-import { ArrowRightIcon, BellIcon, CalendarIcon, ClockIcon } from 'lucide-react';
-import Link from 'next/link';
-import { redirect } from 'next/navigation';
+import { ArrowRightIcon, BellIcon, CalendarIcon, ClockIcon, PillIcon, CheckCircleIcon, MessageCircleIcon } from 'lucide-react';
 import AppointmentsList from '@/components/appointments-list';
 
 const PatientDashboardPage = async () => {
   const session = await getLoggedInUser();
-  if (!session) return redirect('/auth/login');
+  if (!session || session.user.role !== 'PATIENT') return redirect('/auth/login');
   const isPatientProfile = await getPatientProfile(session.user.id);
   const appointments = await getPatientAppointments(session.user.id);
+  const stats = await patientStats(session.user.id);
   const data = appointments.map(item => ({
     scheduledAt: item.scheduledAt,
     scheduledTime: item.scheduledTime,
@@ -26,6 +28,7 @@ const PatientDashboardPage = async () => {
     doctor: item.doctor?.name,
   }));
 
+  const upcomingAppointments = data?.filter(item => isFuture(item.scheduledAt));
   return (
     <div>
       <DashboardCard username={session.user.name} />
@@ -34,27 +37,34 @@ const PatientDashboardPage = async () => {
         <PatientOnboarding userId={session.user.id} />
       ) : (
         <>
-          <div className='grid grid-cols-1 md:grid-cols-3 gap-5 my-10'>
+          <div className='grid grid-cols-1 md:grid-cols-4 gap-5 my-10'>
             <DashboardStatCard
-              stat='2'
-              desc='Upcoming appointments'
+              stat={stats.upcoming.toString()}
+              desc='Upcoming'
               bgColor='bg-blue-100'
               color='text-blue-700'
               icon={<CalendarIcon size={20} />}
             />
             <DashboardStatCard
-              stat='4'
-              desc='Pending Intake forms'
+              stat={stats.pendingIntakeForms.toString()}
+              desc='Pending Intake'
               icon={<ClockIcon size={20} />}
               bgColor='bg-yellow-100'
               color='text-yellow-700'
             />
             <DashboardStatCard
-              stat='4'
-              desc='Unread Notifications'
+              stat={stats.unreadNotifications.toString()}
+              desc='Notifications'
               icon={<BellIcon size={20} />}
               bgColor='bg-red-100'
               color='text-red-700'
+            />
+            <DashboardStatCard
+              stat={stats.completedAppointments.toString()}
+              desc='Completed'
+              icon={<CheckCircleIcon size={20} />}
+              bgColor='bg-emerald-100'
+              color='text-emerald-700'
             />
           </div>
 
@@ -72,6 +82,7 @@ const PatientDashboardPage = async () => {
               <AppointmentsList
                 isPatient={session.user.role}
                 appointments={data}
+                isCard={true}
               />
             </div>
 

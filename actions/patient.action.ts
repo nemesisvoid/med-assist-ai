@@ -50,7 +50,7 @@ export const createPatientProfile = async (userId: string | undefined, formData:
       data: {
         medicalRecordNumber: generateMedicalRecordNumber(),
         userId: userId,
-        dateOfBirth: data.dateOfBirth,
+        dateOfBirth: data.dateOfBirth ?? new Date(),
         gender: data.gender,
         genotype: data.genotype,
         bloodGroup: data.bloodGroup,
@@ -164,11 +164,15 @@ export const getPatientAppointments = async (userId: string) => {
   return res;
 };
 
-export const getPatientNotifications = async (userId: string) => {
+export const getUserNotifications = async (userId: string) => {
   const res = await prisma.notification.findMany({
     where: {
       userId: userId,
     },
+    orderBy: [
+      { isRead: 'asc' }, // unread (false) comes before read (true)
+      { createdAt: 'desc' }, // newest first within each group
+    ],
   });
   return res;
 };
@@ -314,4 +318,95 @@ Return ONLY a valid JSON object matching this exact format schema without markdo
       message: 'AI analysis failed',
     };
   }
+};
+
+export const getPatientAppointmentById = async (appointmentId: string, patientId: string) => {
+  try {
+    const res = await prisma.appointment.findUnique({
+      where: {
+        id: appointmentId,
+        patientId,
+      },
+      include: {
+        clinicalNote: {
+          include: {
+            prescriptions: true,
+          },
+        },
+        intakeForm: true,
+        followUp: true,
+        doctor: {
+          include: {
+            doctorProfile: true,
+          },
+        },
+      },
+    });
+
+    if (!res) throw new Error('Appointment not found');
+
+    return res;
+  } catch (error) {
+    console.log(error);
+    // throw error;
+  }
+};
+
+
+export const patientStats = async (patientId: string) => {
+  const upcoming = await prisma.appointment.count({
+    where: {
+      patientId,
+      scheduledAt: {
+        gte: new Date(),
+      },
+    },
+  });
+
+  const unreadNotifications = await prisma.notification.count({
+    where: {
+      userId: patientId,
+      isRead: false,
+    },
+  });
+
+  const completedAppointments = await prisma.appointment.count({
+    where: {
+      patientId,
+      status: 'COMPLETED',
+    },
+  });
+
+  const pendingIntakeForms = await prisma.appointment.count({
+    where: {
+      patientId,
+      status: 'PENDING_INTAKE',
+    },
+  });
+
+  const unreadMessages = await prisma.message.count({
+    where: {
+      receiverId: patientId,
+      isRead: false,
+    },
+  });
+
+  const totalPrescriptions = await prisma.prescription.count({
+    where: {
+      clinicalNote: {
+        appointment: {
+          patientId,
+        },
+      },
+    },
+  });
+
+  return {
+    upcoming,
+    unreadNotifications,
+    completedAppointments,
+    pendingIntakeForms,
+    unreadMessages,
+    totalPrescriptions,
+  };
 };

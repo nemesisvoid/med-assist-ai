@@ -16,6 +16,12 @@ export async function proxy(req: NextRequest) {
   const isLoggedInUserDoctor = role === 'DOCTOR';
   const isLoggedInUserAdmin = role === 'ADMIN';
 
+  console.log({
+    pathname: nextUrl.pathname,
+    role,
+    isLoggedIn,
+  });
+
   const isPatientRoute = patientRoutes.some(route => nextUrl.pathname.startsWith(route));
 
   const isDoctorRoute = doctorRoutes.some(route => nextUrl.pathname.startsWith(route));
