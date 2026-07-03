@@ -2,32 +2,32 @@ import { getPatientAppointments, getPatientProfile } from '@/actions/patient.act
 import PatientOnboarding from '@/components/patient/patient-onboarding';
 import { getLoggedInUser } from '@/lib/get-user';
 import { redirect } from 'next/navigation';
-import AppointmentsList from '@/components/appointments-list';
+import PatientAppointmentsList from '@/components/appointments-list';
 
 const PatientAppointmentPage = async () => {
   const session = await getLoggedInUser();
   if (!session) return redirect('/auth/login');
+
   const patientProfile = await getPatientProfile(session.user.id);
   const appointments = await getPatientAppointments(session.user.id);
+
   const data = appointments.map(item => ({
+    appointmentId: item.id,
     scheduledAt: item.scheduledAt,
     scheduledTime: item.scheduledTime,
-    title: item.title,
-    appointmentId: item.id,
     appointmentType: item.appointmentType,
     appointmentReason: item.appointmentReason,
-    intakeFormId: item.intakeForm?.id,
-    doctor: item.doctor?.name,
+    intakeFormId: item.intakeForm?.id ?? null,
+    doctor: item.doctor?.name ?? null,
+    status: item.status ?? null,
   }));
+
   return (
     <div>
       {!patientProfile ? (
         <PatientOnboarding userId={session.user.id} />
       ) : (
-        <AppointmentsList
-          appointments={data}
-          isPatient={session.user.role}
-        />
+        <PatientAppointmentsList appointments={data} />
       )}
     </div>
   );
