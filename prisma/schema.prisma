@@ -83,6 +83,7 @@ enum MessageStatus {
   DELIVERED
   READ
   FAILED
+  SYSTEM
 }
 
 model User {
@@ -209,8 +210,8 @@ model Appointment {
   intakeForm   IntakeForm?
   clinicalNote ClinicalNote?
 
-  messages      Message[]
-  conversations Conversation[]
+  messages           Message[]
+  activeConversation Conversation? @relation("ActiveConversation")
 
   @@index([patientId])
   @@index([doctorId])
@@ -310,16 +311,25 @@ model Conversation {
   patientId String
   doctorId  String
 
-  appointmentId String?
+  // The appointment currently open for messaging.
+  // null = no active appointment (e.g., appointment completed)
+  activeAppointmentId String? @unique
+
+  // Set to now()+7 days when activeAppointment is COMPLETED.
+  // Conversation becomes read-only after this date.
+  chatLocksAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   messages Message[]
 
-  patient     User         @relation("PatientConversations", fields: [patientId], references: [id], onDelete: Cascade)
-  doctor      User         @relation("DoctorConversations", fields: [doctorId], references: [id], onDelete: Cascade)
-  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+  patient           User         @relation("PatientConversations", fields: [patientId], references: [id], onDelete: Cascade)
+  doctor            User         @relation("DoctorConversations", fields: [doctorId], references: [id], onDelete: Cascade)
+  activeAppointment Appointment? @relation("ActiveConversation", fields: [activeAppointmentId], references: [id])
+
+  // One conversation per patient-doctor pair
+  @@unique([patientId, doctorId])
 }
 
 model Message {

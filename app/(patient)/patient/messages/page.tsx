@@ -8,35 +8,47 @@ const PatientMessagePage = async () => {
 
     if (!loggedInUser || loggedInUser.user.role !== 'PATIENT') return redirect('/');
 
-    const { data: conversation } = await getPatientMessages(loggedInUser.user.id);
+    const { data: conversations } = await getPatientMessages(loggedInUser.user.id);
 
-
-    const data = conversation?.map((c: any) => ({
+    const data = conversations?.map((c: any) => ({
         id: c.id,
-        // The doctor is the partner in this conversation
         partnerId: c.doctorId,
         name: c.doctor.name,
         avatar: c.doctor.doctorProfile?.imageUrl ?? c.doctor.image ?? null,
         initials: c.doctor.name.slice(0, 2).toUpperCase(),
         specialty: c.doctor.doctorProfile?.specialty,
-        appointmentType: c.appointment?.appointmentType,
-        appointmentStatus: c.appointment?.status,
-        unread: c.messages.filter((m) => !m.isRead && m.senderId !== loggedInUser.user.id).length,
+        // For sidebar display
+        appointmentType: c.activeAppointment?.appointmentType,
+        appointmentStatus: c.activeAppointment?.status,
+        unread: c.messages.filter((m: any) => !m.isRead && m.senderId !== loggedInUser.user.id).length,
         lastMessage: c.messages[c.messages.length - 1]?.content ?? undefined,
-        appointment: c.appointment ? {
-            id: c.appointment.id,
-            status: c.appointment.status,
-            appointmentType: c.appointment.appointmentType,
-            scheduledAt: c.appointment.scheduledAt.toISOString(),
-        } : undefined,
-        messages: c.messages.map((m) => ({
+        // Active appointment for the chat section banner & lock logic
+        activeAppointment: c.activeAppointment ? {
+            id: c.activeAppointment.id,
+            status: c.activeAppointment.status,
+            appointmentType: c.activeAppointment.appointmentType,
+            scheduledAt: c.activeAppointment.scheduledAt.toISOString(),
+        } : null,
+        // Grace-period lock date (7 days after appointment was completed)
+        chatLocksAt: c.chatLocksAt ? new Date(c.chatLocksAt).toISOString() : null,
+        messages: c.messages.map((m: any) => ({
             id: m.id,
             conversationId: c.id,
+            appointmentId: m.appointmentId ?? null,
+            appointment: m.appointment ? {
+                id: m.appointment.id,
+                status: m.appointment.status,
+                appointmentType: m.appointment.appointmentType,
+                scheduledAt: m.appointment.scheduledAt instanceof Date
+                    ? m.appointment.scheduledAt.toISOString()
+                    : m.appointment.scheduledAt,
+            } : null,
             senderId: m.senderId,
             receiverId: m.receiverId,
             content: m.content,
             createdAt: m.createdAt,
             isRead: m.isRead,
+            messageStatus: m.messageStatus ?? undefined,
         })),
     }));
 

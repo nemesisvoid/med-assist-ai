@@ -513,10 +513,38 @@ export const markAppointmentCompleteAction = async (appointmentId: string, docto
   try {
     const appointment = await prisma.appointment.update({
       where: { id: appointmentId },
-      data: {
-        status: 'COMPLETED',
-      },
+      data: { status: 'COMPLETED' },
+      include: { patient: { select: { name: true } } },
     });
+
+    // ── Chat grace-period: lock chat 7 days after completion ──────────────────
+    const chatLocksAt = new Date();
+    chatLocksAt.setDate(chatLocksAt.getDate() + 5);
+
+    const conversation = await prisma.conversation.findFirst({
+      where: { patientId: appointment.patientId, doctorId: appointment.doctorId ?? doctorId },
+      select: { id: true, patientId: true },
+    });
+
+    if (conversation) {
+      // Clear the active appointment and set the lock date
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { activeAppointmentId: null, chatLocksAt },
+      });
+
+      // Inject a SYSTEM message so both participants see the lock countdown
+      await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          appointmentId,
+          senderId: doctorId,
+          receiverId: conversation.patientId,
+          content: `This appointment has been marked as complete. Chat history for this appointment will be locked on ${chatLocksAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}. You have 5 days to review your messages.`,
+          messageStatus: 'SYSTEM',
+        },
+      });
+    }
 
     // Notify patient
     await prisma.notification.create({

@@ -16,6 +16,7 @@ import { Server } from 'socket.io';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from './generated/prisma/client';
+import { MESSAGING_ALLOWED_STATUSES } from './lib/messaging-constants';
 
 // ─── Prisma setup (mirrors lib/prisma.ts but for standalone Node process) ──────
 
@@ -129,10 +130,32 @@ io.on('connection', async (socket) => {
     }
 
     try {
-      // Persist to DB
+      // 1. Fetch the conversation to verify the active appointment
+      const conversation = await prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: {
+          activeAppointmentId: true,
+          activeAppointment: { select: { status: true } },
+        },
+      });
+
+      const MESSAGING_ALLOWED = MESSAGING_ALLOWED_STATUSES as readonly string[];
+
+      if (!conversation?.activeAppointmentId) {
+        socket.emit('error', { message: 'Messaging is unavailable — no active appointment.' });
+        return;
+      }
+
+      if (!conversation.activeAppointment || !MESSAGING_ALLOWED.includes(conversation.activeAppointment.status)) {
+        socket.emit('error', { message: 'Messaging is not permitted for the current appointment status.' });
+        return;
+      }
+
+      // 2. Persist with the active appointmentId stamped on the message
       const message = await prisma.message.create({
         data: {
           conversationId,
+          appointmentId: conversation.activeAppointmentId,
           senderId,
           receiverId,
           content: content.trim(),
@@ -140,16 +163,17 @@ io.on('connection', async (socket) => {
         },
       });
 
-      // Touch conversation timestamp so sidebar sorting stays correct
+      // 3. Touch conversation timestamp so sidebar sorting stays correct
       await prisma.conversation.update({
         where: { id: conversationId },
         data: { updatedAt: new Date() },
       });
 
-      // Broadcast to all sockets in the room (sender included — for multi-tab)
+      // 4. Broadcast to all sockets in the room (sender included — for multi-tab)
       const outgoing = {
         id: message.id,
         conversationId: message.conversationId,
+        appointmentId: message.appointmentId,
         senderId: message.senderId,
         receiverId: message.receiverId,
         content: message.content,
@@ -164,6 +188,7 @@ io.on('connection', async (socket) => {
       socket.emit('error', { message: 'Failed to send message. Please try again.' });
     }
   });
+
 
   // ── Typing indicator ─────────────────────────────────────────────────────────
   socket.on('typing', ({ conversationId, userId: typingUserId, isTyping }: TypingPayload) => {

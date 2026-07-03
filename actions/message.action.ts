@@ -1,160 +1,125 @@
 'use server'
 
 import { prisma } from "@/lib/prisma";
-import { MessageFormSchema } from "@/schema/validators";
-import * as z from 'zod';
+import { MESSAGING_ALLOWED_STATUSES } from '@/lib/messaging-constants';
 
-
-export const sendMessage = async (formData: z.infer<typeof MessageFormSchema>) => {
-    try {
-        const validatedData = MessageFormSchema.safeParse(formData);
-        if (!validatedData.success) {
-            throw new Error(validatedData.error.message);
-        }
-
-        const { data } = validatedData;
-        await prisma.message.create({
-            data: {
-                senderId: data.senderId,
-                receiverId: data.receiverId,
-                content: data.content,
-                isRead: false,
-            },
-        });
-        return { success: true, message: 'Message sent successfully' };
-    } catch (error) {
-        console.log(error);
-        return { success: false, message: 'Something went wrong' };
-    }
-}
-
+// ─── getPatientMessages ─────────────────────────────────────────────────────────
 
 export const getPatientMessages = async (patientId: string) => {
     try {
-        const res = await prisma.conversation.findMany({
-            where: {
-                patientId: patientId,
-                appointmentId: { not: null },
-            },
+        const conversations = await prisma.conversation.findMany({
+            where: { patientId },
             include: {
                 messages: {
                     orderBy: { createdAt: 'asc' },
-                },
-                doctor: {
-                    select: {
-                        name: true,
-                        image: true,
-                        doctorProfile: {
-                            select: { specialty: true, imageUrl: true },
+                    include: {
+                        appointment: {
+                            select: { id: true, status: true, appointmentType: true, scheduledAt: true },
                         },
                     },
                 },
-                appointment: {
-                    select: {
-                        id: true,
-                        status: true,
-                        appointmentType: true,
-                        scheduledAt: true,
-                    }
-                }
-            },
-            orderBy: { updatedAt: 'desc' },
-        });
-
-        return { success: true, data: res };
-    }
-    catch (error) {
-        console.log(error);
-        return { success: false, message: 'Something went wrong' };
-    }
-}
-
-export const getDoctorMessages = async (doctorId: string) => {
-    try {
-        const res = await prisma.conversation.findMany({
-            where: {
-                doctorId: doctorId,
-                appointmentId: { not: null },
-            },
-            include: {
-                messages: {
-                    orderBy: { createdAt: 'asc' },
-                },
-                patient: {
-                    select: {
-                        name: true,
-                        image: true,
-                        patientProfile: {
-                            select: { imageUrl: true },
-                        },
-                    },
-                },
-                appointment: {
-                    select: {
-                        id: true,
-                        status: true,
-                        appointmentType: true,
-                        scheduledAt: true,
-                    }
-                }
-            },
-            orderBy: { updatedAt: 'desc' },
-        });
-
-        return { success: true, data: res };
-    }
-    catch (error) {
-        console.log(error);
-        return { success: false, message: 'Something went wrong' };
-    }
-}
-
-/**
- * Fetches appointments eligible for starting a new conversation.
- * Excludes: CANCELLED, PENDING_INTAKE, COMPLETED.
- * An appointment that already has a conversation surfaces its conversationId
- * so the dialog can navigate to it directly instead of creating a duplicate.
- */
-export const getAppointmentsForConversation = async (userId: string, userRole: string) => {
-    try {
-        const isPatient = userRole === 'PATIENT';
-
-        // Fetch existing conversations keyed by appointmentId
-        const existingConversations = await prisma.conversation.findMany({
-            where: {
-                ...(isPatient ? { patientId: userId } : { doctorId: userId }),
-                appointmentId: { not: null },
-            },
-            select: { id: true, appointmentId: true },
-        });
-
-        // Build a map: appointmentId -> conversationId
-        const appointmentConversationMap = new Map<string, string>(
-            existingConversations
-                .filter(c => c.appointmentId !== null)
-                .map(c => [c.appointmentId as string, c.id])
-        );
-
-        const appointments = await prisma.appointment.findMany({
-            where: {
-                ...(isPatient ? { patientId: userId, doctorId: { not: null } } : { doctorId: userId }),
-                // Exclude cancelled, incomplete intake, and completed appointments
-                status: { notIn: ['CANCELLED', 'PENDING_INTAKE', 'COMPLETED'] },
-            },
-            include: {
                 doctor: {
                     select: {
-                        id: true,
                         name: true,
                         image: true,
                         doctorProfile: { select: { specialty: true, imageUrl: true } },
                     },
                 },
+                activeAppointment: {
+                    select: { id: true, status: true, appointmentType: true, scheduledAt: true },
+                },
+            },
+            orderBy: { updatedAt: 'desc' },
+        });
+
+        return { success: true, data: conversations };
+    } catch (error) {
+        console.error('[getPatientMessages]', error);
+        return { success: false, message: 'Something went wrong', data: undefined };
+    }
+};
+
+// ─── getDoctorMessages ─────────────────────────────────────────────────────────
+
+export const getDoctorMessages = async (doctorId: string) => {
+    try {
+        const conversations = await prisma.conversation.findMany({
+            where: { doctorId },
+            include: {
+                messages: {
+                    orderBy: { createdAt: 'asc' },
+                    include: {
+                        appointment: {
+                            select: { id: true, status: true, appointmentType: true, scheduledAt: true },
+                        },
+                    },
+                },
                 patient: {
                     select: {
-                        id: true,
                         name: true,
                         image: true,
+                        patientProfile: { select: { imageUrl: true } },
+                    },
+                },
+                activeAppointment: {
+                    select: { id: true, status: true, appointmentType: true, scheduledAt: true },
+                },
+            },
+            orderBy: { updatedAt: 'desc' },
+        });
+
+        return { success: true, data: conversations };
+    } catch (error) {
+        console.error('[getDoctorMessages]', error);
+        return { success: false, message: 'Something went wrong', data: undefined };
+    }
+};
+
+// ─── getAppointmentsForConversation ────────────────────────────────────────────
+/**
+ * Fetches appointments eligible for messaging.
+ * For the "Start / Open Conversation" dialog.
+ *
+ * - Excludes CANCELLED, PENDING_INTAKE, COMPLETED
+ * - Returns the existing conversationId for this patient-doctor pair (if any)
+ *   so the dialog can navigate to it rather than create a duplicate.
+ */
+export const getAppointmentsForConversation = async (userId: string, userRole: string) => {
+    try {
+        const isPatient = userRole === 'PATIENT';
+
+        // Map: partnerId → existing conversationId (one per pair)
+        const existingConversations = await prisma.conversation.findMany({
+            where: isPatient ? { patientId: userId } : { doctorId: userId },
+            select: {
+                id: true,
+                doctorId: true,
+                patientId: true,
+                activeAppointmentId: true,
+            },
+        });
+        const partnerConversationMap = new Map<string, { convId: string; activeApptId: string | null }>(
+            existingConversations.map(c => [
+                isPatient ? c.doctorId : c.patientId,
+                { convId: c.id, activeApptId: c.activeAppointmentId },
+            ])
+        );
+
+        const appointments = await prisma.appointment.findMany({
+            where: {
+                ...(isPatient ? { patientId: userId, doctorId: { not: null } } : { doctorId: userId }),
+                status: { notIn: ['CANCELLED', 'PENDING_INTAKE', 'COMPLETED'] },
+            },
+            include: {
+                doctor: {
+                    select: {
+                        id: true, name: true, image: true,
+                        doctorProfile: { select: { specialty: true, imageUrl: true } },
+                    },
+                },
+                patient: {
+                    select: {
+                        id: true, name: true, image: true,
                         patientProfile: { select: { imageUrl: true } },
                     },
                 },
@@ -162,41 +127,54 @@ export const getAppointmentsForConversation = async (userId: string, userRole: s
             orderBy: { scheduledAt: 'asc' },
         });
 
-        // Check if there are any pending intake appointments
-        const hasPendingIntake = isPatient ? (await prisma.appointment.count({
-            where: {
-                patientId: userId,
-                status: 'PENDING_INTAKE',
-            }
-        })) > 0 : false;
+        // Check for pending intake appointments (informational, for empty-state message)
+        const hasPendingIntake = isPatient
+            ? (await prisma.appointment.count({ where: { patientId: userId, status: 'PENDING_INTAKE' } })) > 0
+            : false;
 
-        // Normalize the partner so the client doesn't need to check role
-        const normalized = appointments.map(appt => ({
-            id: appt.id,
-            appointmentType: appt.appointmentType,
-            appointmentReason: appt.appointmentReason,
-            scheduledAt: appt.scheduledAt,
-            scheduledTime: appt.scheduledTime,
-            status: appt.status,
-            // Expose the existing conversation for this specific appointment (if any)
-            existingConversationId: appointmentConversationMap.get(appt.id) ?? null,
-            partner: isPatient
-                ? { id: appt.doctor?.id, name: appt.doctor?.name, image: appt.doctor?.image, specialty: appt.doctor?.doctorProfile?.specialty, imageUrl: appt.doctor?.doctorProfile?.imageUrl }
-                : { id: appt.patient.id, name: appt.patient.name, image: appt.patient.image, specialty: 'Patient', imageUrl: appt.patient.patientProfile?.imageUrl }
-        }));
+        // Deduplicate by partner — one entry per doctor/patient, earliest upcoming appointment
+        const seenPartners = new Set<string>();
+        const normalized = appointments
+            .filter(appt => {
+                const partnerId = isPatient ? appt.doctor?.id : appt.patient.id;
+                if (!partnerId || seenPartners.has(partnerId)) return false;
+                seenPartners.add(partnerId);
+                return true;
+            })
+            .map(appt => {
+                const partnerId = isPatient ? appt.doctor?.id : appt.patient.id;
+                const existing = partnerId ? partnerConversationMap.get(partnerId) : undefined;
+                return {
+                    id: appt.id,
+                    appointmentType: appt.appointmentType,
+                    appointmentReason: appt.appointmentReason,
+                    scheduledAt: appt.scheduledAt,
+                    scheduledTime: appt.scheduledTime,
+                    status: appt.status,
+                    // If a conversation already exists for this partner, expose it
+                    existingConversationId: existing?.convId ?? null,
+                    partner: isPatient
+                        ? { id: appt.doctor?.id, name: appt.doctor?.name, image: appt.doctor?.image, specialty: appt.doctor?.doctorProfile?.specialty, imageUrl: appt.doctor?.doctorProfile?.imageUrl }
+                        : { id: appt.patient.id, name: appt.patient.name, image: appt.patient.image, specialty: 'Patient', imageUrl: appt.patient.patientProfile?.imageUrl },
+                };
+            });
 
         return { success: true, data: normalized, hasPendingIntake };
     } catch (error) {
-        console.log(error);
+        console.error('[getAppointmentsForConversation]', error);
         return { success: false, message: 'Something went wrong', data: [], hasPendingIntake: false };
     }
 };
 
+// ─── createOrOpenConversation ──────────────────────────────────────────────────
 /**
- * Creates a conversation for a patient-doctor pair tied to a specific appointment.
- * Deduplicates on patientId + doctorId + appointmentId to prevent exact duplicates.
+ * Upserts a conversation for a patient-doctor pair.
+ *   - If one exists already: update activeAppointmentId to the new appointment.
+ *   - If none exists: create one with this appointment as active.
+ *
+ * Uses @@unique([patientId, doctorId]) under the hood.
  */
-export const createConversation = async ({
+export const createOrOpenConversation = async ({
     patientId,
     doctorId,
     appointmentId,
@@ -206,21 +184,51 @@ export const createConversation = async ({
     appointmentId: string;
 }) => {
     try {
-        // Prevent duplicate conversations for the same appointment
-        const existing = await prisma.conversation.findFirst({
-            where: { patientId, doctorId, appointmentId },
-        });
-        if (existing) {
-            return { success: true, data: existing };
-        }
-
-        const conversation = await prisma.conversation.create({
-            data: { patientId, doctorId, appointmentId },
+        const conversation = await prisma.conversation.upsert({
+            where: { patientId_doctorId: { patientId, doctorId } },
+            create: { patientId, doctorId, activeAppointmentId: appointmentId },
+            update: { activeAppointmentId: appointmentId },
         });
 
         return { success: true, data: conversation };
     } catch (error) {
-        console.log(error);
-        return { success: false, message: 'Failed to create conversation' };
+        console.error('[createOrOpenConversation]', error);
+        return { success: false, message: 'Failed to create or open conversation' };
+    }
+};
+
+// ─── setActiveAppointment ──────────────────────────────────────────────────────
+/**
+ * Updates the activeAppointmentId on a conversation.
+ * Called when an appointment status changes to a messaging-eligible status.
+ */
+export const setActiveAppointment = async (conversationId: string, appointmentId: string) => {
+    try {
+        await prisma.conversation.update({
+            where: { id: conversationId },
+            data: { activeAppointmentId: appointmentId },
+        });
+        return { success: true };
+    } catch (error) {
+        console.error('[setActiveAppointment]', error);
+        return { success: false };
+    }
+};
+
+// ─── clearActiveAppointment ────────────────────────────────────────────────────
+/**
+ * Sets activeAppointmentId to null — called when an appointment is COMPLETED.
+ * Locks messaging but preserves history.
+ */
+export const clearActiveAppointment = async (conversationId: string) => {
+    try {
+        await prisma.conversation.update({
+            where: { id: conversationId },
+            data: { activeAppointmentId: null },
+        });
+        return { success: true };
+    } catch (error) {
+        console.error('[clearActiveAppointment]', error);
+        return { success: false };
     }
 };

@@ -9,6 +9,7 @@ type MessageListProps = {
 const MessageList = ({ data, isActive, onClick }: MessageListProps) => {
     return (
         <div>
+            testing list here
             {data.map(msg => {
                 return <button aria-current={isActive ? 'true' : 'false'}
                     onClick={() => onClick(msg.id)}

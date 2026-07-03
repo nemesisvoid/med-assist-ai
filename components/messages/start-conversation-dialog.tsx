@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { getAppointmentsForConversation, createConversation } from '@/actions/message.action';
+import { getAppointmentsForConversation, createOrOpenConversation } from '@/actions/message.action';
 import { toast } from 'sonner';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -125,16 +125,16 @@ export default function StartConversationDialog({
 
     startTransition(async () => {
       try {
-        const res = await createConversation({
+        const res = await createOrOpenConversation({
           patientId: userRole === 'PATIENT' ? userId : appt.partner!.id,
           doctorId: userRole === 'DOCTOR' ? userId : appt.partner!.id,
           appointmentId: appt.id,
         });
         if (!res.success || !res.data) {
-          toast.error('Could not start conversation. Please try again.');
+          toast.error('Could not open conversation. Please try again.');
           return;
         }
-        toast.success(`Conversation with ${appt.partner!.name} started!`);
+        toast.success(`Conversation opened!`);
         onConversationCreated(res.data.id);
         onOpenChange(false);
       } catch {
@@ -224,6 +224,9 @@ export default function StartConversationDialog({
                 const hasExistingConversation = !!appt.existingConversationId;
 
                 const onClickButton = () => {
+                  // console.log('a, b,c,d,c,d')
+                  console.log()
+
                   if (isPendingIntake) {
                     onOpenChange(false);
                     router.push(`/patient/appointments/${appt.id}`);

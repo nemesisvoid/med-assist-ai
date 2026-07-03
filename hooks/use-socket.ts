@@ -16,6 +16,14 @@ import { getSocket } from '@/lib/socket-client';
 export type SocketMessage = {
   id: string;
   conversationId: string;
+  appointmentId?: string | null;
+  /** Appointment details — present on DB-loaded messages; used for group separators */
+  appointment?: {
+    id: string;
+    status: string;
+    appointmentType: string;
+    scheduledAt: string;
+  } | null;
   senderId: string;
   receiverId: string;
   content: string | null;
@@ -71,11 +79,24 @@ export function useSocket({
     const onConnect = () => setIsConnected(true);
     const onDisconnect = () => setIsConnected(false);
 
-    /** Append new message — deduplicates by id for safety */
+    /** Append new message — replaces optimistic counterpart or deduplicates by id */
     const onNewMessage = (msg: SocketMessage) => {
-      setMessages(prev =>
-        prev.some(m => m.id === msg.id) ? prev : [...prev, msg],
-      );
+      setMessages(prev => {
+        // Skip if exact id already present (duplicate from server)
+        if (prev.some(m => m.id === msg.id)) return prev;
+
+        // Replace matching optimistic message (same sender + same content)
+        const optimisticIdx = prev.findIndex(
+          m => m.id.startsWith('optimistic-') && m.senderId === msg.senderId && m.content === msg.content,
+        );
+        if (optimisticIdx !== -1) {
+          const next = [...prev];
+          next[optimisticIdx] = msg;
+          return next;
+        }
+
+        return [...prev, msg];
+      });
     };
 
     /** Remote party is typing */
@@ -149,11 +170,23 @@ export function useSocket({
   }, [userId, conversationId, receiverId]);
 
   // ── Sync initial messages when conversation changes ──────────────────────────
+  const prevConvRef = useRef<string | null>(null);
   useEffect(() => {
-    setMessages(initialMessages);
-    setIsTyping(false);
+    const conversationSwitched = prevConvRef.current !== conversationId;
+    prevConvRef.current = conversationId;
+
+    setMessages(prev => {
+      // Always reset on conversation switch
+      if (conversationSwitched) return initialMessages;
+      // For the same conversation: only update if server gave us MORE messages
+      // (avoids overwriting optimistic/real-time messages mid-session)
+      if (initialMessages.length > prev.length) return initialMessages;
+      return prev;
+    });
+
+    if (conversationSwitched) setIsTyping(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversationId]);
+  }, [conversationId, initialMessages.length]);
 
   // ── Actions ──────────────────────────────────────────────────────────────────
 
@@ -161,6 +194,19 @@ export function useSocket({
     (content: string) => {
       if (!conversationId || !receiverId || !content.trim()) return;
       const socket = getSocket(userId);
+
+      // Optimistic update — sender sees message instantly without waiting for server echo
+      const optimisticMsg: SocketMessage = {
+        id: `optimistic-${Date.now()}`,
+        conversationId,
+        senderId: userId,
+        receiverId,
+        content: content.trim(),
+        createdAt: new Date().toISOString(),
+        isRead: false,
+      };
+      setMessages(prev => [...prev, optimisticMsg]);
+
       socket.emit('send_message', {
         conversationId,
         senderId: userId,
