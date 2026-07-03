@@ -7,7 +7,7 @@ import {
   Hourglass,
 } from 'lucide-react';
 
-import PatientAppointmentCard from './patient/patient-appointment-card';
+import PatientAppointmentCard from './patient-appointment-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export type PatientAppointmentItem = {
@@ -144,7 +144,7 @@ const PatientAppointmentsList = ({ appointments }: PatientAppointmentsListProps)
           <TabsTrigger
             value='upcoming'
             className='
-              flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold
+              flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold
               text-text-muted transition-all duration-150
               data-[state=active]:bg-white data-[state=active]:text-text-base
               data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200/80
@@ -162,7 +162,7 @@ const PatientAppointmentsList = ({ appointments }: PatientAppointmentsListProps)
           <TabsTrigger
             value='history'
             className='
-              flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold
+              flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold
               text-text-muted transition-all duration-150
               data-[state=active]:bg-white data-[state=active]:text-text-base
               data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200/80

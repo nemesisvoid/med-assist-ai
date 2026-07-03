@@ -2,7 +2,7 @@ import { getPatientAppointments, getPatientProfile } from '@/actions/patient.act
 import PatientOnboarding from '@/components/patient/patient-onboarding';
 import { getLoggedInUser } from '@/lib/get-user';
 import { redirect } from 'next/navigation';
-import PatientAppointmentsList from '@/components/appointments-list';
+import PatientAppointmentsList from '@/components/patient/patient-appointments-list';
 
 const PatientAppointmentPage = async () => {
   const session = await getLoggedInUser();

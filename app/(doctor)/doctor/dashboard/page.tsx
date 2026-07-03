@@ -1,11 +1,10 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { isFuture } from 'date-fns';
-import { formatDistanceToNow } from 'date-fns';
+import { isFuture, compareAsc, formatDistanceToNow } from 'date-fns';
 
 import DashboardStatCard from '@/components/dashboard-stats-card';
 import PatientOnboarding from '@/components/patient/patient-onboarding';
-import AppointmentsList from '@/components/appointments-list';
+import DoctorAppointmentCard from '@/components/doctor/doctor-appointment-card';
 import UpcomingScheduleWidget from '@/components/doctor/upcoming-schedule-widget';
 
 import { getLoggedInUser } from '@/lib/get-user';
@@ -44,11 +43,17 @@ const DoctorDashboardPage = async () => {
     appointmentId: item.id,
     appointmentType: item.appointmentType,
     appointmentReason: item.appointmentReason,
-    intakeFormId: item.intakeForm?.id,
+    intakeFormId: item.intakeForm?.id ?? undefined,
     patientName: item.patient.name,
     status: item.status,
     riskLevel: item.riskLevel || 'LOW',
+    scheduledDate: item.scheduledAt,
   }));
+
+  // Single next upcoming appointment for the dashboard card
+  const nextAppointment = [...appointments]
+    .filter(item => isFuture(new Date(item.scheduledAt)))
+    .sort((a, b) => compareAsc(new Date(a.scheduledAt), new Date(b.scheduledAt)))[0] ?? null;
 
   return (
     <div className='max-w-7xl mx-auto px-4 py-8 space-y-8'>
@@ -117,27 +122,48 @@ const DoctorDashboardPage = async () => {
 
           {/* Main Dashboard Workspace Grid */}
           <div className='grid grid-cols-1 lg:grid-cols-12 gap-8'>
-            {/* Upcoming Appointments Panel */}
+            {/* Next Upcoming Appointment Panel */}
             <div className='lg:col-span-8 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col'>
               <div className='flex justify-between items-center border-b border-slate-100 p-5 bg-slate-50/50'>
                 <div className='flex items-center gap-2'>
                   <CalendarIcon className='w-4 h-4 text-slate-500' />
-                  <h2 className='text-sm font-bold text-slate-800 uppercase tracking-wider'>Upcoming Appointments</h2>
+                  <h2 className='text-sm font-bold text-slate-800 uppercase tracking-wider'>Next Appointment</h2>
                 </div>
                 <Link
-                  href='/doctor/dashboard'
+                  href='/doctor/appointment'
                   className='text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 transition-colors hover:underline'>
-                  Refresh
+                  View all
                   <ArrowRightIcon className='w-3.5 h-3.5' />
                 </Link>
               </div>
 
               <div className='p-6 flex-1'>
-                <AppointmentsList
-                  role={session.user.role}
-                  appointments={data}
-                  isCard={true}
-                />
+                {nextAppointment ? (
+                  <DoctorAppointmentCard
+                    data={{
+                      appointmentId: nextAppointment.id,
+                      appointmentType: nextAppointment.appointmentType,
+                      appointmentReason: nextAppointment.appointmentReason,
+                      patientName: nextAppointment.patient.name,
+                      scheduledTime: nextAppointment.scheduledTime,
+                      scheduledDate: nextAppointment.scheduledAt,
+                      title: nextAppointment.title,
+                      intakeFormId: nextAppointment.intakeForm?.id ?? undefined,
+                      status: nextAppointment.status,
+                      riskLevel: nextAppointment.riskLevel || 'LOW',
+                    }}
+                  />
+                ) : (
+                  <div className='flex flex-col items-center justify-center py-16 text-center'>
+                    <div className='w-14 h-14 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center mb-4 text-slate-400'>
+                      <CalendarIcon className='w-6 h-6' />
+                    </div>
+                    <p className='text-sm font-bold text-slate-700 mb-1'>No upcoming appointments</p>
+                    <p className='text-xs text-slate-400 max-w-[200px] leading-relaxed'>
+                      Your patient queue is clear. New appointments will appear here.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 

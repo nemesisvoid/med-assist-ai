@@ -27,7 +27,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { useTransition } from 'react';
+import { useTransition, useState, Fragment } from 'react';
 import Link from 'next/link';
 
 // ─── Icon map by notification type ───────────────────────────────────────────
@@ -180,130 +180,143 @@ const EmptyState = () => (
   </div>
 );
 
-// ─── Single notification row + detail dialog ──────────────────────────────────
-
 const NotificationRow = ({
   item,
   config,
-  onOpen,
+  pathPrefix,
 }: {
   item: NotificationItem;
   config: (typeof typeConfig)[NotificationType];
-  onOpen: () => void;
-}) => (
-  <Dialog onOpenChange={open => { if (open) onOpen(); }}>
-    {/* Base UI DialogTrigger renders as a plain button — no asChild needed */}
-    <DialogTrigger className="w-full text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded-xl">
-      <div className="flex items-start gap-4 w-full">
-        {/* Icon bubble */}
-        <div className={cn('mt-0.5 w-10 h-10 rounded-xl flex items-center justify-center shrink-0', config.iconBg)}>
-          <NotificationIcon type={item.type} className={config.iconColor} />
-        </div>
+  pathPrefix: string;
+}) => {
+  const [open, setOpen] = useState(false);
+  const [, startLocalTransition] = useTransition();
 
-        {/* Body text */}
-        <div className="flex-1 min-w-0 text-left">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className={cn('text-sm font-semibold truncate text-text-base', !item.isRead && 'text-slate-900')}>
-              {item.title}
-            </p>
-            {!item.isRead && (
-              <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-widest bg-blue-600 text-white px-2 py-0.5 rounded-full">
-                New
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-text-soft mt-1 line-clamp-2 leading-relaxed">{item.message}</p>
-          <div className="flex items-center gap-3 mt-2">
-            <span className={cn('text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md', config.badgeBg, config.badgeText)}>
-              {config.label}
-            </span>
-            <span className="text-[11px] text-text-soft">
-              {formatDistanceToNow(item.createdAt, { addSuffix: true })}
-            </span>
-          </div>
-        </div>
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    // Fire-and-forget inside its own isolated transition — never touches parent state
+    if (next && !item.isRead) {
+      startLocalTransition(async () => {
+        await markNotificationAsRead(item.id, pathPrefix);
+      });
+    }
+  };
 
-        {/* Unread dot */}
-        {!item.isRead && (
-          <div className="mt-2 shrink-0">
-            <div className="w-2 h-2 rounded-full bg-blue-600 ring-2 ring-blue-200" />
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      {/* Base UI DialogTrigger renders as a plain button — no asChild needed */}
+      <DialogTrigger className="w-full text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded-xl">
+        <div className="flex items-start gap-4 w-full">
+          {/* Icon bubble */}
+          <div className={cn('mt-0.5 w-10 h-10 rounded-xl flex items-center justify-center shrink-0', config.iconBg)}>
+            <NotificationIcon type={item.type} className={config.iconColor} />
           </div>
-        )}
-      </div>
-    </DialogTrigger>
 
-    {/* ── Detail dialog ── */}
-    <DialogContent className="sm:max-w-lg p-0 overflow-hidden rounded-2xl border-border-subtle shadow-xl">
-      {/* Coloured header band */}
-      <div className={cn('px-6 pt-6 pb-5 border-b border-slate-100', config.iconBg)}>
-        <DialogHeader>
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-white/70 shadow-sm">
-              <NotificationIcon type={item.type} className={cn('w-6 h-6', config.iconColor)} />
-            </div>
-            <div className="flex-1 min-w-0 pt-0.5">
-              <DialogTitle className="text-base font-bold text-slate-900 leading-snug">
+          {/* Body text */}
+          <div className="flex-1 min-w-0 text-left">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className={cn('text-sm font-semibold truncate text-text-base', !item.isRead && 'text-slate-900')}>
                 {item.title}
-              </DialogTitle>
-              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                <span className={cn('text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md', config.badgeBg, config.badgeText)}>
-                  {config.label}
+              </p>
+              {!item.isRead && (
+                <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-widest bg-blue-600 text-white px-2 py-0.5 rounded-full">
+                  New
                 </span>
-                {!item.isRead && (
-                  <span className="text-[10px] font-bold uppercase tracking-widest bg-blue-600 text-white px-2 py-0.5 rounded-full">
-                    Unread
+              )}
+            </div>
+            <p className="text-xs text-text-soft mt-1 line-clamp-2 leading-relaxed">{item.message}</p>
+            <div className="flex items-center gap-3 mt-2">
+              <span className={cn('text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md', config.badgeBg, config.badgeText)}>
+                {config.label}
+              </span>
+              <span className="text-[11px] text-text-soft">
+                {formatDistanceToNow(item.createdAt, { addSuffix: true })}
+              </span>
+            </div>
+          </div>
+
+          {/* Unread dot */}
+          {!item.isRead && (
+            <div className="mt-2 shrink-0">
+              <div className="w-2 h-2 rounded-full bg-blue-600 ring-2 ring-blue-200" />
+            </div>
+          )}
+        </div>
+      </DialogTrigger>
+
+      {/* ── Detail dialog ── */}
+      <DialogContent className="sm:max-w-lg p-0 overflow-hidden rounded-2xl border-border-subtle shadow-xl">
+        {/* Coloured header band */}
+        <div className={cn('px-6 pt-6 pb-5 border-b border-slate-100', config.iconBg)}>
+          <DialogHeader>
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-white/70 shadow-sm">
+                <NotificationIcon type={item.type} className={cn('w-6 h-6', config.iconColor)} />
+              </div>
+              <div className="flex-1 min-w-0 pt-0.5">
+                <DialogTitle className="text-base font-bold text-slate-900 leading-snug">
+                  {item.title}
+                </DialogTitle>
+                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                  <span className={cn('text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md', config.badgeBg, config.badgeText)}>
+                    {config.label}
                   </span>
-                )}
+                  {!item.isRead && (
+                    <span className="text-[10px] font-bold uppercase tracking-widest bg-blue-600 text-white px-2 py-0.5 rounded-full">
+                      Unread
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        </DialogHeader>
-      </div>
+          </DialogHeader>
+        </div>
 
-      {/* Body */}
-      <div className="px-6 py-5 space-y-4">
-        <p className="text-sm text-slate-700 leading-relaxed">{item.message}</p>
+        {/* Body */}
+        <div className="px-6 py-5 space-y-4">
+          <p className="text-sm text-slate-700 leading-relaxed">{item.message}</p>
 
-        {item.link && (
-          <Link
-            href={item.link}
-            className={cn(
-              'flex items-center justify-center gap-2 w-full rounded-xl px-4 py-2.5',
-              'text-sm font-semibold text-white transition-opacity duration-150 hover:opacity-90',
-              config.iconBg.replace('bg-', 'bg-').replace('-50', '-600'),
-            )}
-          >
-            View details
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <line x1="5" y1="12" x2="19" y2="12" />
-              <polyline points="12 5 19 12 12 19" />
-            </svg>
-          </Link>
-        )}
+          {item.link && (
+            <Link
+              href={item.link}
+              className={cn(
+                'flex items-center justify-center gap-2 w-full rounded-xl px-4 py-2.5',
+                'text-sm font-semibold text-white transition-opacity duration-150 hover:opacity-90',
+                config.iconBg.replace('bg-', 'bg-').replace('-50', '-600'),
+              )}
+            >
+              View details
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12" />
+                <polyline points="12 5 19 12 12 19" />
+              </svg>
+            </Link>
+          )}
 
-        {/* Metadata strip */}
-        <div className="rounded-xl bg-slate-50 border border-slate-100 divide-y divide-slate-100">
-          <div className="flex items-center justify-between px-4 py-3">
-            <span className="text-xs text-slate-400 font-medium uppercase tracking-wider">Received</span>
-            <span className="text-xs font-semibold text-slate-700">
-              {format(item.createdAt, 'MMM d, yyyy · h:mm a')}
-            </span>
-          </div>
-          <div className="flex items-center justify-between px-4 py-3">
-            <span className="text-xs text-slate-400 font-medium uppercase tracking-wider">Status</span>
-            <span className={cn('text-xs font-bold', item.isRead ? 'text-slate-400' : 'text-blue-600')}>
-              {item.isRead ? 'Read' : 'Unread'}
-            </span>
-          </div>
-          <div className="flex items-center justify-between px-4 py-3">
-            <span className="text-xs text-slate-400 font-medium uppercase tracking-wider">Category</span>
-            <span className={cn('text-xs font-semibold', config.iconColor)}>{config.label}</span>
+          {/* Metadata strip */}
+          <div className="rounded-xl bg-slate-50 border border-slate-100 divide-y divide-slate-100">
+            <div className="flex items-center justify-between px-4 py-3">
+              <span className="text-xs text-slate-400 font-medium uppercase tracking-wider">Received</span>
+              <span className="text-xs font-semibold text-slate-700">
+                {format(item.createdAt, 'MMM d, yyyy · h:mm a')}
+              </span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3">
+              <span className="text-xs text-slate-400 font-medium uppercase tracking-wider">Status</span>
+              <span className={cn('text-xs font-bold', item.isRead ? 'text-slate-400' : 'text-blue-600')}>
+                {item.isRead ? 'Read' : 'Unread'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3">
+              <span className="text-xs text-slate-400 font-medium uppercase tracking-wider">Category</span>
+              <span className={cn('text-xs font-semibold', config.iconColor)}>{config.label}</span>
+            </div>
           </div>
         </div>
-      </div>
-    </DialogContent>
-  </Dialog>
-);
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 // ─── Main exported component ──────────────────────────────────────────────────
 
@@ -315,13 +328,6 @@ const Notifications = ({
 }: NotificationsProps) => {
   const [isPending, startTransition] = useTransition();
 
-  const handleRead = (id: string, isRead: boolean) => {
-    if (!isRead) {
-      startTransition(async () => {
-        await markNotificationAsRead(id, pathPrefix);
-      });
-    }
-  };
 
   const handleMarkAllRead = () => {
     startTransition(async () => {
@@ -416,9 +422,9 @@ const Notifications = ({
             const isFirstRead = item.isRead && idx > 0 && !notification[idx - 1].isRead;
 
             return (
-              <>
+              <Fragment key={item.id}>
                 {isFirstRead && (
-                  <li key={`sep-${idx}`} className="flex items-center gap-3 py-2" role="separator">
+                  <li className="flex items-center gap-3 py-2" role="separator">
                     <div className="h-px flex-1 bg-slate-200" />
                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-1">
                       Earlier
@@ -427,7 +433,6 @@ const Notifications = ({
                   </li>
                 )}
                 <li
-                  key={item.id}
                   className={cn(
                     'rounded-2xl border px-5 py-4 transition-all duration-200',
                     item.isRead
@@ -438,10 +443,10 @@ const Notifications = ({
                   <NotificationRow
                     item={item}
                     config={config}
-                    onOpen={() => handleRead(item.id, item.isRead)}
+                    pathPrefix={pathPrefix}
                   />
                 </li>
-              </>
+              </Fragment>
             );
           })}
         </ul>
