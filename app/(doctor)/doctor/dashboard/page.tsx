@@ -76,18 +76,6 @@ const DoctorDashboardPage = async () => {
               Review upcoming appointments, update patient intake documentation, and manage diagnostic reports seamlessly from your clinical dashboard.
             </p>
           </div>
-
-          <div className='flex items-center gap-3 bg-white/5 backdrop-blur-md px-5 py-3.5 rounded-xl border border-white/10 shrink-0 self-start md:self-center'>
-            <div className='p-2 rounded-lg bg-blue-500/20 text-blue-400'>
-              <CalendarIcon className='w-5 h-5' />
-            </div>
-            <div>
-              <div className='text-[10px] uppercase font-bold tracking-wider text-slate-400'>Today's Date</div>
-              <div className='text-sm font-semibold text-white'>
-                {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 

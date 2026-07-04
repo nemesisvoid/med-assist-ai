@@ -375,7 +375,7 @@ const Notifications = ({
 
             {/* Clear all — guarded by confirmation dialog */}
             <AlertDialog>
-              <AlertDialogTrigger>
+              <AlertDialogTrigger asChild>
                 <Button
                   variant="ghost"
                   size="sm"
