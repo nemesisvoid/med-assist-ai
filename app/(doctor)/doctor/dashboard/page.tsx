@@ -6,9 +6,10 @@ import DashboardStatCard from '@/components/dashboard-stats-card';
 import PatientOnboarding from '@/components/patient/patient-onboarding';
 import DoctorAppointmentCard from '@/components/doctor/doctor-appointment-card';
 import AppointmentCalendar from '@/components/doctor/appointment-calendar';
+import RecentPatientsWidget from '@/components/doctor/recent-patients-widget';
 
 import { getLoggedInUser } from '@/lib/get-user';
-import { getDoctorProfile, getDoctorsAppointments } from '@/actions/doctor.action';
+import { getDoctorProfile, getDoctorsAppointments, getRecentPatients } from '@/actions/doctor.action';
 import { getUserNotifications } from '@/actions/patient.action';
 import { cn } from '@/lib/utils';
 
@@ -29,6 +30,7 @@ const DoctorDashboardPage = async () => {
   const isDoctorProfile = await getDoctorProfile(session.user.id);
   const appointments = await getDoctorsAppointments(session.user.id);
   const notifications = await getUserNotifications(session.user.id);
+  const recentPatients = await getRecentPatients(session.user.id);
 
   // Dynamic Metrics Calculations
   const upcomingCount = appointments.filter(item => isFuture(new Date(item.scheduledAt))).length;
@@ -110,8 +112,10 @@ const DoctorDashboardPage = async () => {
 
           {/* Main Dashboard Workspace Grid */}
           <div className='grid grid-cols-1 lg:grid-cols-12 gap-8'>
-            {/* Next Upcoming Appointment Panel */}
-            <div className='lg:col-span-8 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col h-fit'>
+            {/* Left Column Workspace */}
+            <div className='lg:col-span-8 flex flex-col gap-8'>
+              {/* Next Upcoming Appointment Panel */}
+              <div className='bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col h-fit'>
               <div className='flex justify-between items-center border-b border-slate-100 p-5 bg-slate-50/50'>
                 <div className='flex items-center gap-2'>
                   <CalendarIcon className='w-4 h-4 text-slate-500' />
@@ -154,6 +158,10 @@ const DoctorDashboardPage = async () => {
                 )}
               </div>
             </div>
+
+            {/* Recent Patients Widget */}
+            <RecentPatientsWidget recentPatients={recentPatients} />
+          </div>
 
             {/* Right Sidebar: Schedule & Notifications */}
             <div className='lg:col-span-4 flex flex-col gap-8'>

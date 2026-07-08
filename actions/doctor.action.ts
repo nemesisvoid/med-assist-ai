@@ -659,3 +659,107 @@ export const getDoctorProfile = async (userId: string | undefined) => {
     console.log(error, 'error getting profile');
   }
 };
+
+export const getRecentPatients = async (doctorId: string) => {
+  try {
+    const recentAppointments = await prisma.appointment.findMany({
+      where: { doctorId },
+      orderBy: { updatedAt: 'desc' },
+      take: 20, // Fetch recent enough to get distinct
+      include: {
+        patient: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            patientProfile: {
+              select: {
+                dateOfBirth: true,
+                bloodGroup: true,
+                gender: true,
+              }
+            }
+          }
+        }
+      }
+    });
+
+    // Deduplicate patients
+    const seenPatientIds = new Set();
+    const recentPatients = [];
+
+    for (const appt of recentAppointments) {
+      if (!seenPatientIds.has(appt.patient.id)) {
+        seenPatientIds.add(appt.patient.id);
+        recentPatients.push({
+          patient: appt.patient,
+          lastAppointment: {
+            id: appt.id,
+            reason: appt.appointmentReason,
+            type: appt.appointmentType,
+            scheduledAt: appt.scheduledAt,
+          }
+        });
+      }
+      if (recentPatients.length >= 8) break; // Limit to 8 recent patients
+    }
+
+    return recentPatients;
+  } catch (error) {
+    console.error('Error fetching recent patients:', error);
+    return [];
+  }
+};
+
+export const getPatientFullRecord = async (patientId: string, doctorId: string) => {
+  try {
+    // GUARD CLAUSE: Ensure the doctor is authorized to view this patient
+    // A doctor is authorized if they have at least one appointment with the patient.
+    const hasAppointment = await prisma.appointment.findFirst({
+      where: {
+        patientId: patientId,
+        doctorId: doctorId,
+      },
+    });
+
+    if (!hasAppointment) {
+      throw new Error('Unauthorized: You are not assigned to this patient.');
+    }
+
+    // Fetch the full medical record
+    const record = await prisma.user.findUnique({
+      where: { id: patientId },
+      include: {
+        patientProfile: true,
+        patientAppointments: {
+          where: { doctorId: doctorId },
+          orderBy: { scheduledAt: 'desc' },
+          include: {
+            intakeForm: true,
+            doctor: {
+              select: {
+                name: true,
+                doctorProfile: {
+                  select: {
+                    specialty: true,
+                  }
+                }
+              }
+            },
+            clinicalNote: {
+              include: {
+                prescriptions: true,
+              }
+            }
+          }
+        }
+      }
+    });
+
+    return record;
+  } catch (error) {
+    console.error('Error fetching full medical record:', error);
+    throw error;
+  }
+};
