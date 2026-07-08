@@ -277,8 +277,8 @@ You are an expert AI clinical documentation assistant. Generate a professional S
 Name: ${appointment.patient.name}
 Gender: ${patientProfile?.gender || 'N/A'}
 Age/DOB: ${age}
-Allergies: ${patientProfile?.allergies || 'None noted'}
-Current Medications: ${patientProfile?.medications || 'None noted'}
+Allergies: ${patientProfile?.allergies || appointment.intakeForm.allergies || 'None noted'}
+Current Medications: ${patientProfile?.medications || appointment.intakeForm.medications || 'None noted'}
 Medical History: ${patientProfile?.medicalHistory || 'None noted'}
 
 --- INTAKE FORM ---
@@ -390,7 +390,7 @@ export const applySoapDraftAction = async (appointmentId: string, doctorId: stri
   }
 };
 
-export const generatePatientSummaryNotes = async (appointmentId: string) => {
+export const generatePatientSummaryNotes = async (appointmentId: string, draftData?: any) => {
   try {
     const appointment = await prisma.appointment.findUnique({
       where: { id: appointmentId },
@@ -415,7 +415,26 @@ export const generatePatientSummaryNotes = async (appointmentId: string) => {
     const followUp = appointment.followUp;
     const intake = appointment.intakeForm;
     const doctor = appointment.doctor;
-    const prescriptions = note?.prescriptions ?? [];
+    
+    // Prioritize draft data (unsaved form values) over DB values
+    const subjective = draftData?.subjective ?? note?.subjective ?? 'Not recorded';
+    const objective = draftData?.objective ?? note?.objective ?? 'Not recorded';
+    const assessment = draftData?.assessment ?? note?.assessment ?? 'Not recorded';
+    const plan = draftData?.plan ?? note?.plan ?? 'Not recorded';
+    const diagnosis = draftData?.diagnosis ?? note?.diagnosis ?? 'Not recorded';
+    const treatmentPlan = draftData?.treatmentPlan ?? note?.treatmentPlan ?? 'Not recorded';
+    
+    const prescriptions = draftData?.prescriptions?.length 
+        ? draftData.prescriptions 
+        : (note?.prescriptions ?? []);
+        
+    const requiresFollowUp = draftData?.requiresFollowUp ?? !!followUp;
+    const followUpDate = draftData?.followUpDate 
+        ? new Date(draftData.followUpDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+        : (followUp?.recommendedDate ? new Date(followUp.recommendedDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : null);
+    const followUpTime = draftData?.followUpTime ?? followUp?.recommendedTime;
+    const followUpReason = draftData?.followUpReason ?? followUp?.reason;
+    const followUpNotes = draftData?.followUpNotes ?? followUp?.addtionalNotes;
 
     const prompt = `You are a compassionate and highly skilled medical communication specialist at a modern telehealth platform called MedAssist AI. Your job is to generate a clear, warm, and easy-to-understand appointment summary letter addressed directly to the patient.
 
@@ -445,28 +464,28 @@ PATIENT INTAKE (What the patient reported before the appointment):
 - Additional Patient Notes: ${intake?.additionalNotes ?? 'None'}
 
 DOCTOR'S CLINICAL FINDINGS:
-- Subjective Notes: ${note?.subjective ?? 'Not recorded'}
-- Objective Observations: ${note?.objective ?? 'Not recorded'}
-- Assessment: ${note?.assessment ?? 'Not recorded'}
-- Clinical Plan: ${note?.plan ?? 'Not recorded'}
-- Formal Diagnosis: ${note?.diagnosis ?? 'Not recorded'}
-- Treatment Plan: ${note?.treatmentPlan ?? 'Not recorded'}
+- Subjective Notes: ${subjective}
+- Objective Observations: ${objective}
+- Assessment: ${assessment}
+- Clinical Plan: ${plan}
+- Formal Diagnosis: ${diagnosis}
+- Treatment Plan: ${treatmentPlan}
 
 PRESCRIPTIONS:
 ${prescriptions.length > 0
-        ? prescriptions.map((p, i) =>
+        ? prescriptions.map((p: any, i: number) =>
           `${i + 1}. ${p.medicationName} — ${p.dosage}, taken ${p.frequency} for ${p.duration}`
         ).join('\n')
         : 'No medications prescribed at this time.'
       }
 
 FOLLOW-UP CARE:
-${followUp
+${requiresFollowUp && followUpDate
         ? `A follow-up appointment has been scheduled.
-- Recommended Date: ${new Date(followUp.recommendedDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-- Recommended Time: ${followUp.recommendedTime ?? 'To be confirmed'}
-- Reason for Follow-up: ${followUp.reason}
-- Additional Instructions: ${followUp.addtionalNotes ?? 'None provided'}`
+- Recommended Date: ${followUpDate}
+- Recommended Time: ${followUpTime ?? 'To be confirmed'}
+- Reason for Follow-up: ${followUpReason ?? 'Not specified'}
+- Additional Instructions: ${followUpNotes ?? 'None provided'}`
         : 'No follow-up appointment has been scheduled at this time.'
       }
 

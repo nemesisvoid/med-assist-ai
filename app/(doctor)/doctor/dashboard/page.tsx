@@ -5,7 +5,7 @@ import { isFuture, compareAsc, formatDistanceToNow } from 'date-fns';
 import DashboardStatCard from '@/components/dashboard-stats-card';
 import PatientOnboarding from '@/components/patient/patient-onboarding';
 import DoctorAppointmentCard from '@/components/doctor/doctor-appointment-card';
-import UpcomingScheduleWidget from '@/components/doctor/upcoming-schedule-widget';
+import AppointmentCalendar from '@/components/doctor/appointment-calendar';
 
 import { getLoggedInUser } from '@/lib/get-user';
 import { getDoctorProfile, getDoctorsAppointments } from '@/actions/doctor.action';
@@ -111,7 +111,7 @@ const DoctorDashboardPage = async () => {
           {/* Main Dashboard Workspace Grid */}
           <div className='grid grid-cols-1 lg:grid-cols-12 gap-8'>
             {/* Next Upcoming Appointment Panel */}
-            <div className='lg:col-span-8 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col'>
+            <div className='lg:col-span-8 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col h-fit'>
               <div className='flex justify-between items-center border-b border-slate-100 p-5 bg-slate-50/50'>
                 <div className='flex items-center gap-2'>
                   <CalendarIcon className='w-4 h-4 text-slate-500' />
@@ -125,7 +125,7 @@ const DoctorDashboardPage = async () => {
                 </Link>
               </div>
 
-              <div className='p-6 flex-1'>
+              <div className='p-6'>
                 {nextAppointment ? (
                   <DoctorAppointmentCard
                     data={{
@@ -157,12 +157,10 @@ const DoctorDashboardPage = async () => {
 
             {/* Right Sidebar: Schedule & Notifications */}
             <div className='lg:col-span-4 flex flex-col gap-8'>
-              <div className='h-[480px]'>
-                <UpcomingScheduleWidget appointments={data} />
-              </div>
+              <AppointmentCalendar appointments={data} />
 
               {/* Notifications Panel */}
-              <div className='bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col flex-1'>
+              <div className='bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col'>
                 <div className='flex justify-between items-center border-b border-slate-100 p-5 bg-slate-50/50'>
                   <div className='flex items-center gap-2'>
                     <BellIcon className='w-4 h-4 text-slate-500' />

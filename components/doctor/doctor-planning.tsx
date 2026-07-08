@@ -38,7 +38,8 @@ export default function DoctorPlanning({ form, appointmentId, isCompleted }: Doc
     const handleGenerateSummary = () => {
         startGenerating(async () => {
             toast.info("Generating patient summary...");
-            const res = await generatePatientSummaryNotes(appointmentId);
+            const draftData = form.getValues();
+            const res = await generatePatientSummaryNotes(appointmentId, draftData);
             if (res?.success && res.summary) {
                 form.setValue("patientSummaryNote", res.summary, { shouldDirty: true });
                 toast.success("Patient summary generated successfully!");

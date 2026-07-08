@@ -45,27 +45,25 @@ export default function UpcomingScheduleWidget({ appointments }: UpcomingSchedul
           <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Upcoming Schedule</h2>
         </div>
       </div>
-      <div className="p-4 flex-1">
-        <div className="h-[400px]">
-          <FullCalendar
-            plugins={[listPlugin]}
-            initialView="listTwoDays"
-            views={{
-              listTwoDays: {
-                type: 'list',
-                duration: { days: 2 },
-                buttonText: '2 days'
-              }
-            }}
-            headerToolbar={false}
-            events={events}
-            height="100%"
-            noEventsText="No appointments in the next 48 hours"
-            eventClick={(info) => {
-              router.push(`/doctor/appointment/${info.event.id}`);
-            }}
-          />
-        </div>
+      <div className="p-4 flex-1 min-h-0">
+        <FullCalendar
+          plugins={[listPlugin]}
+          initialView="listTwoDays"
+          views={{
+            listTwoDays: {
+              type: 'list',
+              duration: { days: 2 },
+              buttonText: '2 days'
+            }
+          }}
+          headerToolbar={false}
+          events={events}
+          height="100%"
+          noEventsText="No appointments in the next 48 hours"
+          eventClick={(info) => {
+            router.push(`/doctor/appointment/${info.event.id}`);
+          }}
+        />
       </div>
     </div>
   );
