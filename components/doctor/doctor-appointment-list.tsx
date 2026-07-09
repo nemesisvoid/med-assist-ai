@@ -20,9 +20,11 @@ import {
   Stethoscope,
   ClipboardCheck,
   TriangleAlert,
+  History,
 } from 'lucide-react';
 import { AppointmentStatus, RiskLevel } from '@/generated/prisma/enums';
 import { cn, formatEnums, getAppointmentStatusStyle, getRiskLevelStyle } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -216,6 +218,144 @@ const TriageRow = ({ item, index }: { item: DoctorAppointmentItem; index: number
   );
 };
 
+// ── Appointment Card ─────────────────────────────────────────────────────────
+
+const AppointmentCard = ({ item }: { item: DoctorAppointmentItem }) => {
+  const riskCfg = RISK_CONFIG[item.riskLevel] ?? RISK_CONFIG.LOW;
+  const scheduledAt = new Date(item.scheduledDate);
+  const upcoming = isFuture(scheduledAt);
+  const isTerminal = item.status === 'COMPLETED' || item.status === 'CANCELLED';
+
+  const dayLabel = isToday(scheduledAt)
+    ? 'Today'
+    : isTomorrow(scheduledAt)
+    ? 'Tomorrow'
+    : format(scheduledAt, 'MMM d, yyyy');
+
+  const relLabel = upcoming
+    ? `in ${formatDistanceToNow(scheduledAt)}`
+    : `${formatDistanceToNow(scheduledAt)} ago`;
+
+  const initials = item.patientName
+    .split(' ')
+    .slice(0, 2)
+    .map(w => w[0]?.toUpperCase() ?? '')
+    .join('');
+
+  return (
+    <div
+      className={cn(
+        'group relative bg-white rounded-2xl border transition-all duration-200 overflow-hidden shadow-sm',
+        isTerminal
+          ? 'border-slate-200/60 opacity-70 hover:opacity-90'
+          : 'border-slate-200 hover:border-slate-300 hover:shadow-md',
+      )}
+    >
+
+      <div className='p-5'>
+        {/* ── Top row: Avatar + Name + Action ─────────────────────────── */}
+        <div className='flex items-start justify-between gap-3 mb-3'>
+          <div className='flex items-center gap-3 min-w-0'>
+            {/* Avatar */}
+            <div
+              className='w-11 h-11 rounded-xl flex items-center justify-center text-[13px] font-black tracking-tight shrink-0 border bg-slate-50 text-slate-700 border-slate-200'
+            >
+              {initials || <UserRound size={16} />}
+            </div>
+
+            {/* Name + intake warning */}
+            <div className='min-w-0'>
+              <div className='flex items-center gap-2 flex-wrap'>
+                <p className='text-sm font-bold text-text-base truncate'>{item.patientName}</p>
+                {!item.intakeFormId && !isTerminal && (
+                  <span
+                    className='shrink-0 inline-flex items-center gap-0.5 text-[9px] font-black uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-md'
+                    title='Intake form not submitted'
+                  >
+                    <TriangleAlert size={8} />
+                    No Intake
+                  </span>
+                )}
+              </div>
+              <p className='text-xs text-text-muted mt-0.5 truncate max-w-[260px]'>
+                {item.appointmentReason}
+              </p>
+            </div>
+          </div>
+
+          {/* Action button */}
+          <Link
+            href={`/doctor/appointment/${item.appointmentId}`}
+            className={cn(
+              'shrink-0 inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border transition-all duration-150',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-1',
+              isTerminal
+                ? 'text-slate-500 bg-slate-50 border-slate-200 hover:bg-slate-100'
+                : 'text-accent-primary bg-accent-soft border-accent-primary/20 hover:border-accent-primary/40',
+            )}
+          >
+            {isTerminal ? 'View' : 'Review'}
+            <ArrowRight size={12} className='group-hover:translate-x-0.5 transition-transform duration-150' />
+          </Link>
+        </div>
+
+        {/* ── Divider ─────────────────────────────────────────────────── */}
+        <div className='h-px bg-slate-100 mb-3' />
+
+        {/* ── Bottom row: type, date, badges ──────────────────────────── */}
+        <div className='flex flex-wrap items-center gap-x-4 gap-y-2'>
+          {/* Type */}
+          <p className='text-[11px] font-bold text-text-soft uppercase tracking-widest'>
+            {item.appointmentType}
+          </p>
+
+          {/* Date / Time */}
+          <div className='flex items-center gap-1.5'>
+            <CalendarDays size={12} className='text-text-soft shrink-0' />
+            <span className='text-xs font-semibold text-text-base'>{dayLabel}</span>
+            {isToday(scheduledAt) && (
+              <span className='text-[9px] font-black bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded-md border border-sky-200 uppercase tracking-wider animate-pulse'>
+                Now
+              </span>
+            )}
+          </div>
+          {item.scheduledTime && (
+            <div className='flex items-center gap-1.5'>
+              <Clock size={12} className='text-text-soft shrink-0' />
+              <span className='text-xs text-text-muted'>{item.scheduledTime}</span>
+              <span className='text-text-soft text-xs'>·</span>
+              <span className='text-[11px] text-text-muted'>{relLabel}</span>
+            </div>
+          )}
+
+          {/* Badges pushed to the right */}
+          <div className='ml-auto flex items-center gap-2 flex-wrap justify-end'>
+            <span
+              className={cn(
+                'inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-lg border',
+                getAppointmentStatusStyle(item.status),
+              )}
+            >
+              <StatusIcon status={item.status} size={10} />
+              {formatEnums(item.status)}
+            </span>
+
+            <span
+              className={cn(
+                'inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-lg border',
+                getRiskLevelStyle(item.riskLevel),
+              )}
+            >
+              <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', riskCfg.dot)} aria-hidden='true' />
+              {riskCfg.label} Risk
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── Divider ───────────────────────────────────────────────────────────────────
 
 const RowDivider = () => (
@@ -331,6 +471,10 @@ const DoctorAppointmentList = ({ data }: DoctorAppointmentListProps) => {
   }), [data]);
 
   const isFiltered = search || filterStatus !== 'ALL' || filterRisk !== 'ALL';
+
+  // ── Split into upcoming / past ──────────────────────────────────────────
+  const upcomingFiltered = filtered.filter(item => isFuture(new Date(item.scheduledDate)) || isToday(new Date(item.scheduledDate)));
+  const pastFiltered     = filtered.filter(item => isPast(new Date(item.scheduledDate)) && !isToday(new Date(item.scheduledDate)));
 
   return (
     <div className='flex flex-col gap-4'>
@@ -477,69 +621,107 @@ const DoctorAppointmentList = ({ data }: DoctorAppointmentListProps) => {
         )}
       </div>
 
-      {/* ── Queue Table ───────────────────────────────────────────────── */}
-      <div
-        className='bg-white border border-slate-200/80 rounded-xl shadow-sm overflow-hidden'
-        role='table'
-        aria-label='Appointment queue'
-      >
-        {/* Table Header */}
-        <div
-          className='flex items-center gap-0 bg-bg-white border-b border-slate-200/80 px-0'
-          role='rowgroup'
-        >
-          <div className='w-1 shrink-0' aria-hidden='true' />
-          <div className='w-8 pl-2 pr-1 shrink-0' />
-          <div className='w-12 px-3 py-2.5 shrink-0' aria-hidden='true' />
-          <div className='flex-1 py-2.5 pr-3'>
-            <span className='text-[10px] font-black text-text-soft uppercase tracking-widest'>Patient</span>
-          </div>
-          <div className='hidden lg:block w-36 py-2.5 pr-3 shrink-0'>
-            <span className='text-[10px] font-black text-text-soft uppercase tracking-widest'>Type</span>
-          </div>
-          <div className='hidden md:block w-47 py-2.5 pr-6 shrink-0'>
-            <span className='text-[10px] font-black text-text-soft uppercase tracking-widest'>Scheduled</span>
-          </div>
-          <div className='hidden sm:block w-64 py-2.5 pr-6 shrink-0'>
-            <span className='text-[10px] font-black text-text-soft uppercase tracking-widest'>Status / Risk</span>
-          </div>
-          <div className='py-2.5 pr-3 pl-1 shrink-0'>
-            <span className='text-[10px] font-black text-text-soft uppercase tracking-widest'>Action</span>
-          </div>
-        </div>
+      {/* ── Tabs: Upcoming / Past ─────────────────────────────────────── */}
+      <Tabs defaultValue='upcoming' className='w-full'>
+        <TabsList className='h-auto p-1 bg-bg-surface border border-slate-200/80 rounded-xl gap-1 w-full sm:w-auto mb-4'>
+          <TabsTrigger
+            value='upcoming'
+            className='
+              flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold
+              text-text-muted transition-all duration-150
+              data-[state=active]:bg-white data-[state=active]:text-text-base
+              data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200/80
+            '
+          >
+            <CalendarDays size={14} aria-hidden='true' />
+            Upcoming
+            {upcomingFiltered.length > 0 && (
+              <span className='ml-0.5 inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold bg-accent-soft text-accent-primary rounded-full'>
+                {upcomingFiltered.length}
+              </span>
+            )}
+          </TabsTrigger>
 
-        {/* Rows */}
-        <div role='rowgroup'>
-          {filtered.length === 0 ? (
+          <TabsTrigger
+            value='past'
+            className='
+              flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold
+              text-text-muted transition-all duration-150
+              data-[state=active]:bg-white data-[state=active]:text-text-base
+              data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200/80
+            '
+          >
+            <History size={14} aria-hidden='true' />
+            History
+            {pastFiltered.length > 0 && (
+              <span className='ml-0.5 inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold bg-slate-200 text-slate-600 rounded-full'>
+                {pastFiltered.length}
+              </span>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Upcoming */}
+        <TabsContent value='upcoming' className='mt-0'>
+          {upcomingFiltered.length === 0 ? (() => {
+            const overdueCount = pastFiltered.filter(
+              item => item.status !== 'COMPLETED' && item.status !== 'CANCELLED'
+            ).length;
+            return overdueCount > 0 ? (
+              <div className='flex flex-col items-center justify-center py-16 text-center'>
+                <div className='w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center mb-4 text-amber-500'>
+                  <AlertTriangle size={24} />
+                </div>
+                <p className='text-sm font-bold text-text-base mb-1'>No upcoming appointments</p>
+                <p className='text-xs text-text-muted max-w-[240px] leading-relaxed'>
+                  You have{' '}
+                  <span className='font-bold text-amber-600'>{overdueCount} past appointment{overdueCount > 1 ? 's' : ''}</span>
+                  {' '}that {overdueCount > 1 ? 'are' : 'is'} not yet completed. Check your History tab.
+                </p>
+              </div>
+            ) : (
+              <EmptyQueue filtered={!!isFiltered} />
+            );
+          })() : (
+            <div className='flex flex-col gap-3'>
+              {upcomingFiltered.map(item => (
+                <AppointmentCard key={item.appointmentId} item={item} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* History */}
+        <TabsContent value='past' className='mt-0'>
+          {pastFiltered.length === 0 ? (
             <EmptyQueue filtered={!!isFiltered} />
           ) : (
-            filtered.map((item, i) => (
-              <div key={item.appointmentId}>
-                {i > 0 && <RowDivider />}
-                <TriageRow item={item} index={i} />
-              </div>
-            ))
+            <div className='flex flex-col gap-3'>
+              {pastFiltered.map(item => (
+                <AppointmentCard key={item.appointmentId} item={item} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* ── Footer count ──────────────────────────────────────────────── */}
+      {filtered.length > 0 && (
+        <div className='flex items-center justify-between px-1'>
+          <p className='text-[11px] text-text-soft font-medium'>
+            Showing <span className='font-bold text-text-muted'>{filtered.length}</span> of{' '}
+            <span className='font-bold text-text-muted'>{data.length}</span> appointments
+          </p>
+          {isFiltered && (
+            <button
+              onClick={() => { setSearch(''); setFilterStatus('ALL'); setFilterRisk('ALL'); }}
+              className='text-[11px] font-bold text-accent-primary hover:underline cursor-pointer'
+            >
+              Clear filters
+            </button>
           )}
         </div>
-
-        {/* Footer */}
-        {filtered.length > 0 && (
-          <div className='border-t border-slate-100 px-4 py-2.5 flex items-center justify-between'>
-            <p className='text-[11px] text-text-soft font-medium'>
-              Showing <span className='font-bold text-text-muted'>{filtered.length}</span> of{' '}
-              <span className='font-bold text-text-muted'>{data.length}</span> appointments
-            </p>
-            {isFiltered && (
-              <button
-                onClick={() => { setSearch(''); setFilterStatus('ALL'); setFilterRisk('ALL'); }}
-                className='text-[11px] font-bold text-accent-primary hover:underline cursor-pointer'
-              >
-                Clear filters
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 };

@@ -135,6 +135,7 @@ io.on('connection', async (socket) => {
         where: { id: conversationId },
         select: {
           activeAppointmentId: true,
+          chatLocksAt: true,
           activeAppointment: { select: { status: true } },
         },
       });
@@ -146,7 +147,14 @@ io.on('connection', async (socket) => {
         return;
       }
 
-      if (!conversation.activeAppointment || !MESSAGING_ALLOWED.includes(conversation.activeAppointment.status)) {
+      // Lock if grace period has expired
+      if (conversation.chatLocksAt && new Date() > new Date(conversation.chatLocksAt)) {
+        socket.emit('error', { message: 'This conversation has been locked.' });
+        return;
+      }
+
+      const apptStatus = conversation.activeAppointment?.status;
+      if (!apptStatus || (apptStatus !== 'COMPLETED' && !MESSAGING_ALLOWED.includes(apptStatus))) {
         socket.emit('error', { message: 'Messaging is not permitted for the current appointment status.' });
         return;
       }

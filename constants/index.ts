@@ -7,13 +7,9 @@ import {
   ClockIcon,
   FileIcon,
   HomeIcon,
-  UserIcon,
   MessageSquareIcon,
-  DollarSignIcon,
   AlertCircleIcon,
-  CalendarDaysIcon,
 } from 'lucide-react';
-import { Message } from 'react-hook-form';
 
 export const patientSidebarLinks = [
   {
@@ -35,11 +31,6 @@ export const patientSidebarLinks = [
     name: 'Messages',
     href: '/patient/messages',
     icon: MessageSquareIcon,
-  },
-  {
-    name: 'Billing',
-    href: '/patient/billing',
-    icon: DollarSignIcon,
   },
 ];
 

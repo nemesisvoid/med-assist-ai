@@ -63,9 +63,23 @@ const ChatSection = ({ selectedConversationId, selectedConversation, userId, use
     const daysUntilLock = chatLocksAt ? differenceInDays(new Date(chatLocksAt), new Date()) : null;
     const isInGracePeriod = daysUntilLock !== null && daysUntilLock >= 0;
 
-    // Locked when there is no active appointment, or the appointment status doesn't allow messaging
-    // (grace period just shows a warning; messaging remains locked even during grace period)
-    const isLocked = !activeAppt || !(MESSAGING_ALLOWED_STATUSES as readonly string[]).includes(activeAppt.status);
+    // Lock when: no appointment, appointment is CANCELLED, or the grace period has expired.
+    // COMPLETED appointments stay open until chatLocksAt passes.
+    const gracePeriodExpired = chatLocksAt
+        ? differenceInDays(new Date(chatLocksAt), new Date()) < 0
+        : false;
+
+    // Legacy fallback: if activeAppointmentId was nulled in DB (old behaviour) but
+    // chatLocksAt is still set and hasn't expired, treat the chat as open.
+    const hasLegacyGrace = !activeAppt && chatLocksAt && !gracePeriodExpired;
+
+    const isLocked =
+        !hasLegacyGrace && (
+            !activeAppt ||
+            activeAppt.status === 'CANCELLED' ||
+            gracePeriodExpired ||
+            (activeAppt.status !== 'COMPLETED' && !(MESSAGING_ALLOWED_STATUSES as readonly string[]).includes(activeAppt.status))
+        );
 
     const receiverId = selectedConversation?.partnerId ?? null;
 

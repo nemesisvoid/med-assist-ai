@@ -547,10 +547,11 @@ export const markAppointmentCompleteAction = async (appointmentId: string, docto
     });
 
     if (conversation) {
-      // Clear the active appointment and set the lock date
+      // Keep the active appointment linked so the chat section can read its status;
+      // chatLocksAt is the real gate that locks the conversation after 5 days.
       await prisma.conversation.update({
         where: { id: conversation.id },
-        data: { activeAppointmentId: null, chatLocksAt },
+        data: { chatLocksAt },
       });
 
       // Inject a SYSTEM message so both participants see the lock countdown
