@@ -7,6 +7,7 @@ import PatientOnboarding from '@/components/patient/patient-onboarding';
 import DoctorAppointmentCard from '@/components/doctor/doctor-appointment-card';
 import AppointmentCalendar from '@/components/doctor/appointment-calendar';
 import RecentPatientsWidget from '@/components/doctor/recent-patients-widget';
+import AppointmentsChartWidget from '@/components/doctor/appointments-chart-widget';
 
 import { getLoggedInUser } from '@/lib/get-user';
 import { getDoctorProfile, getDoctorsAppointments, getRecentPatients } from '@/actions/doctor.action';
@@ -158,6 +159,9 @@ const DoctorDashboardPage = async () => {
                 )}
               </div>
             </div>
+
+            {/* Appointments Over Time Analytics */}
+            <AppointmentsChartWidget doctorId={session.user.id} />
 
             {/* Recent Patients Widget */}
             <RecentPatientsWidget recentPatients={recentPatients} />

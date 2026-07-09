@@ -6,6 +6,7 @@ import { GoogleGenAI } from '@google/genai';
 import { revalidatePath } from 'next/cache';
 import { createNotification } from './notification.action';
 import { getAge } from '@/lib/utils';
+import { startOfDay, subDays, subMonths, startOfYear, format } from 'date-fns';
 import { clinicalNotesSchema } from '@/schema/validators';
 import { AppointmentStatus } from '@/generated/prisma/enums';
 
@@ -761,5 +762,65 @@ export const getPatientFullRecord = async (patientId: string, doctorId: string) 
   } catch (error) {
     console.error('Error fetching full medical record:', error);
     throw error;
+  }
+};
+
+export const getDashboardAnalytics = async (doctorId: string, timeRange: '7d' | '30d' | '6m' | '1y') => {
+  try {
+    let startDate = new Date();
+    
+    if (timeRange === '7d') startDate = subDays(new Date(), 6);
+    else if (timeRange === '30d') startDate = subDays(new Date(), 29);
+    else if (timeRange === '6m') startDate = subMonths(new Date(), 5);
+    else if (timeRange === '1y') startDate = startOfYear(new Date());
+
+    const appointments = await prisma.appointment.findMany({
+      where: {
+        doctorId,
+        scheduledAt: {
+          gte: startOfDay(startDate)
+        }
+      },
+      select: {
+        scheduledAt: true,
+      }
+    });
+
+    const groupedData: Record<string, number> = {};
+    
+    // Initialize map to ensure empty dates show as 0
+    if (timeRange === '7d' || timeRange === '30d') {
+      const days = timeRange === '7d' ? 7 : 30;
+      for (let i = days - 1; i >= 0; i--) {
+        const d = subDays(new Date(), i);
+        groupedData[format(d, 'MMM d')] = 0;
+      }
+      appointments.forEach(appt => {
+        const key = format(new Date(appt.scheduledAt), 'MMM d');
+        if (groupedData[key] !== undefined) {
+          groupedData[key]++;
+        }
+      });
+    } else {
+      const months = timeRange === '6m' ? 6 : (new Date().getMonth() + 1);
+      for (let i = months - 1; i >= 0; i--) {
+        const d = subMonths(new Date(), i);
+        groupedData[format(d, 'MMM yyyy')] = 0;
+      }
+      appointments.forEach(appt => {
+        const key = format(new Date(appt.scheduledAt), 'MMM yyyy');
+        if (groupedData[key] !== undefined) {
+          groupedData[key]++;
+        }
+      });
+    }
+
+    return Object.entries(groupedData).map(([date, appointments]) => ({
+      date,
+      appointments
+    }));
+  } catch (error) {
+    console.error('Error fetching analytics:', error);
+    return [];
   }
 };

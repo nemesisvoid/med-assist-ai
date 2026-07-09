@@ -18,6 +18,7 @@ import VisitType from './visit-type';
 import { createAppointment } from '@/actions/patient.action';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import { AlertCircleIcon } from 'lucide-react';
 
 const PatientAppointmentForm = ({ userId }) => {
   const router = useRouter();
@@ -25,6 +26,7 @@ const PatientAppointmentForm = ({ userId }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const STEPS = ['Visit Type', 'Select Doctor', 'Date & Time', 'Details', 'Confirm'];
   const [isPending, startTransition] = useTransition();
+  const [activeConflict, setActiveConflict] = useState(false);
 
   const form = useForm({
     resolver: zodResolver(AppointmentFormSchema),
@@ -47,6 +49,7 @@ const PatientAppointmentForm = ({ userId }) => {
         fieldsToValidate = ['appointmentType'];
         break;
       case 1:
+        if (activeConflict) return; // Block navigation if there's a conflict
         fieldsToValidate = ['doctor'];
         break;
       case 2:
@@ -142,7 +145,7 @@ const PatientAppointmentForm = ({ userId }) => {
       <form onSubmit={form.handleSubmit(onSubmit, error => console.log('error', error))}>
         <div className='mx-auto'>
           {currentStep === 0 && <VisitType form={form} />}
-          {currentStep === 1 && <SelectDoctor form={form} />}
+          {currentStep === 1 && <SelectDoctor form={form} userId={userId} onConflict={setActiveConflict} />}
           {currentStep === 2 && <DateTime form={form} />}
           {currentStep === 3 && <Details form={form} />}
           {currentStep === 4 && <Confirm form={form} />}
@@ -159,12 +162,22 @@ const PatientAppointmentForm = ({ userId }) => {
           </Button>
 
           {currentStep < STEPS.length - 1 && (
-            <Button
-              type='button'
-              onClick={handleNext}
-              className='bg-accent-primary hover:bg-accent-hover text-white px-8 py-5'>
-              Continue <ChevronRightIcon className='ml-2 size-4' />
-            </Button>
+            <>
+              {currentStep === 1 && activeConflict ? (
+                <div className='flex items-center gap-2 text-sm font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-4 py-2.5 rounded-xl'>
+                  <AlertCircleIcon className='w-4 h-4 shrink-0' />
+                  Active appointment with this doctor
+                </div>
+              ) : (
+                <Button
+                  type='button'
+                  onClick={handleNext}
+                  disabled={isPending || (currentStep === 1 && activeConflict)}
+                  className='bg-accent-primary hover:bg-accent-hover text-white px-8 py-5'>
+                  Continue <ChevronRightIcon className='ml-2 size-4' />
+                </Button>
+              )}
+            </>
           )}
 
           {currentStep === STEPS.length - 1 && (

@@ -124,6 +124,25 @@ export const createAppointment = async (userId: string, formData: z.infer<typeof
   }
 };
 
+export const checkActiveAppointment = async (patientId: string, doctorId: string) => {
+  try {
+    const existing = await prisma.appointment.findFirst({
+      where: {
+        patientId,
+        doctorId,
+        status: {
+          notIn: ['COMPLETED', 'CANCELLED'],
+        },
+      },
+      select: { id: true },
+    });
+    return { hasActive: !!existing };
+  } catch (error) {
+    console.log('Error checking active appointment:', error);
+    return { hasActive: false };
+  }
+};
+
 export const createIntakeForm = async (userId: string, formData: z.infer<typeof PatientInTakeFormSchema>) => {
   try {
     const res = await prisma.intakeForm.create({

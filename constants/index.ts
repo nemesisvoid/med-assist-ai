@@ -50,11 +50,6 @@ export const doctorSidebarLinks = [
     icon: HomeIcon,
   },
   {
-    name: 'Calendar',
-    href: '/doctor/calendar',
-    icon: CalendarDaysIcon,
-  },
-  {
     name: 'Appointments',
     href: '/doctor/appointment',
     icon: CalendarIcon,

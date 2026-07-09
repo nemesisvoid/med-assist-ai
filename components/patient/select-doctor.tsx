@@ -4,13 +4,16 @@ import { useState, useEffect } from 'react';
 import * as z from 'zod';
 
 import { Controller, UseFormReturn } from 'react-hook-form';
-import { Search, Sparkles, Star } from 'lucide-react';
+import { Search, Sparkles, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { searchDoctors } from '@/actions/doctor.action';
+import { checkActiveAppointment } from '@/actions/patient.action';
 import { AppointmentFormSchema } from '@/validations/validation';
 
 type SelectDoctorProps = {
   form: UseFormReturn<z.infer<typeof AppointmentFormSchema>>;
+  userId: string;
+  onConflict: (hasConflict: boolean) => void;
 };
 export type DoctorResult = {
   id: string;
@@ -35,11 +38,19 @@ const getInitials = (name: string) => {
     .toUpperCase();
 };
 
-const SelectDoctor = ({ form }: SelectDoctorProps) => {
+const SelectDoctor = ({ form, userId, onConflict }: SelectDoctorProps) => {
   const [searchInput, setSearchInput] = useState<string>('');
   const [debouncedSearch, setDebouncedSearch] = useState<string>(searchInput);
   const [searchResults, setSearchResults] = useState<DoctorResult[]>([]);
   const [isPending, setIsPending] = useState<boolean>(false);
+  const [conflictDoctorId, setConflictDoctorId] = useState<string | null>(null);
+
+  const handleDoctorSelect = async (field: any, doctorId: string) => {
+    field.onChange(doctorId);
+    const { hasActive } = await checkActiveAppointment(userId, doctorId);
+    setConflictDoctorId(hasActive ? doctorId : null);
+    onConflict(hasActive);
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchInput), 600);
@@ -90,7 +101,11 @@ const SelectDoctor = ({ form }: SelectDoctorProps) => {
               {/* Static Option: Any Available Doctor */}
               <button
                 type='button'
-                onClick={() => field.onChange('any_available')}
+                onClick={() => {
+                  field.onChange('any_available');
+                  setConflictDoctorId(null);
+                  onConflict(false);
+                }}
                 className={cn(
                   'flex items-start gap-4 p-5 rounded-xl border transition-all text-left w-full',
                   field.value === 'any_available'
@@ -120,63 +135,72 @@ const SelectDoctor = ({ form }: SelectDoctorProps) => {
                   const isSelected = field.value === doc.id;
                   const profile = doc.doctorProfile;
                   const isAvailable = profile?.availabilityStatus === 'AVAILABLE';
-
-                  // Mocking rating for UI completeness based on image
-                  const mockRating = (Math.random() * (5.0 - 4.5) + 4.5).toFixed(1);
-                  const mockReviews = Math.floor(Math.random() * 200) + 50;
+                  const hasConflict = conflictDoctorId === doc.id;
 
                   return (
                     <button
                       key={doc.id}
                       type='button'
                       disabled={!isAvailable}
-                      onClick={() => field.onChange(doc.id)}
+                      onClick={() => handleDoctorSelect(field, doc.id)}
                       className={cn(
-                        'flex items-start gap-4 p-5 rounded-xl border transition-all text-left w-full relative',
+                        'flex flex-col gap-4 p-5 rounded-xl border transition-all text-left w-full relative',
                         !isAvailable && 'opacity-60 cursor-not-allowed bg-slate-50',
-                        isSelected && isAvailable
+                        hasConflict
+                          ? 'border-amber-400 bg-amber-50/40 shadow-sm ring-1 ring-amber-400'
+                          : isSelected && isAvailable
                           ? 'border-blue-600 bg-blue-50/30 shadow-sm ring-1 ring-blue-600'
                           : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm',
                       )}>
-                      {/* Avatar */}
-                      <div className='w-12 h-12 shrink-0 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold overflow-hidden border border-slate-200'>
-                        {profile?.imageUrl ? (
-                          <img
-                            src={profile.imageUrl}
-                            alt={doc.name}
-                            className='w-full h-full object-cover'
-                          />
-                        ) : (
-                          <span className='text-[15px]'>{getInitials(doc.name)}</span>
-                        )}
-                      </div>
-
-                      {/* Content */}
-                      <div className='flex flex-col w-full'>
-                        <div className='flex items-start justify-between mb-1'>
-                          <h4 className='font-bold text-slate-900 text-[15px]'>{doc.name}</h4>
-
-                          {/* Availability Badge */}
-                          {isAvailable ? (
-                            <span className='bg-emerald-50 text-emerald-700 text-[11px] font-bold px-2.5 py-1 rounded-full border border-emerald-100'>
-                              Available
-                            </span>
+                      <div className='flex items-start gap-4'>
+                        {/* Avatar */}
+                        <div className='w-12 h-12 shrink-0 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold overflow-hidden border border-slate-200'>
+                          {profile?.imageUrl ? (
+                            <img
+                              src={profile.imageUrl}
+                              alt={doc.name}
+                              className='w-full h-full object-cover'
+                            />
                           ) : (
-                            <span className='bg-slate-100 text-slate-500 text-[11px] font-bold px-2.5 py-1 rounded-full'>Unavailable</span>
+                            <span className='text-[15px]'>{getInitials(doc.name)}</span>
                           )}
                         </div>
 
-                        {/* Specialty & Exp */}
-                        <p className='text-[13px] font-medium text-slate-600 mb-2'>
-                          {profile?.specialty || 'General Practice'}
-                          {profile?.yearsOfExperience ? ` · ${profile.yearsOfExperience} yrs exp` : ''}
-                        </p>
+                        {/* Content */}
+                        <div className='flex flex-col w-full'>
+                          <div className='flex items-start justify-between mb-1'>
+                            <h4 className='font-bold text-slate-900 text-[15px]'>{doc.name}</h4>
 
-                        {/* Bio / Description */}
-                        <p className='text-[13px] text-slate-500 line-clamp-2 mb-3 leading-relaxed'>
-                          {profile?.bio || 'Specialist dedicated to providing comprehensive and compassionate care.'}
-                        </p>
+                            {/* Availability Badge */}
+                            {isAvailable ? (
+                              <span className='bg-emerald-50 text-emerald-700 text-[11px] font-bold px-2.5 py-1 rounded-full border border-emerald-100'>
+                                Available
+                              </span>
+                            ) : (
+                              <span className='bg-slate-100 text-slate-500 text-[11px] font-bold px-2.5 py-1 rounded-full'>Unavailable</span>
+                            )}
+                          </div>
+
+                          {/* Specialty & Exp */}
+                          <p className='text-[13px] font-medium text-slate-600 mb-2'>
+                            {profile?.specialty || 'General Practice'}
+                            {profile?.yearsOfExperience ? ` · ${profile.yearsOfExperience} yrs exp` : ''}
+                          </p>
+
+                          {/* Bio / Description */}
+                          <p className='text-[13px] text-slate-500 line-clamp-2 mb-3 leading-relaxed'>
+                            {profile?.bio || 'Specialist dedicated to providing comprehensive and compassionate care.'}
+                          </p>
+                        </div>
                       </div>
+
+                      {/* Conflict Warning Banner */}
+                      {hasConflict && (
+                        <div className='flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-100 border border-amber-200 px-3 py-2 rounded-lg w-full'>
+                          <AlertCircle className='w-3.5 h-3.5 shrink-0' />
+                          You already have an active appointment with this doctor. Please choose a different doctor or wait until your current appointment is completed.
+                        </div>
+                      )}
                     </button>
                   );
                 })
