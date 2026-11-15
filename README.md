@@ -111,7 +111,7 @@ MedAssist AI is a telehealth platform that connects patients with doctors and cu
 | Database | PostgreSQL ([Neon](https://neon.tech)) via [Prisma 7](https://www.prisma.io) and the `@prisma/adapter-pg` driver adapter |
 | AI | Google Gemini via [`@google/genai`](https://www.npmjs.com/package/@google/genai) (risk analysis, SOAP drafts, patient summaries) |
 | Real-time | [Socket.IO 4](https://socket.io) (standalone server in `server.ts`) |
-| Email | [Resend](https://resend.com) REST API (console output in development) |
+| Email | [Resend](https://resend.com) REST API or any SMTP server via [Nodemailer](https://nodemailer.com) (console output in development) |
 | Notifications UI | Sonner toasts |
 | Dates | date-fns 4 |
 
@@ -134,7 +134,7 @@ MedAssist AI is a telehealth platform that connects patients with doctors and cu
         └──────────────────────────────────────────────────┘
                │
                ├─▶ Google Gemini (triage, SOAP drafts, summaries)
-               └─▶ Resend (verification, reset, staff invites)
+               └─▶ Resend or SMTP (verification, reset, staff invites)
 ```
 
 - **Route protection.** `proxy.ts` checks the session and role on every request. Users who are signed in but on the wrong area are sent to their own dashboard, and users who are signed out are sent to `/auth/login?next=…`.
@@ -182,7 +182,7 @@ npm run dev      # Next.js app  → http://localhost:3000
 npm run socket   # Socket.IO server for real-time chat → :3001 (SOCKET_PORT)
 ```
 
-In development, verification, password-reset and invite emails are **printed to the terminal** running `npm run dev` unless `RESEND_API_KEY` is set. Open the link from there to complete the flow.
+In development, verification, password-reset and invite emails are **printed to the terminal** running `npm run dev` unless an email provider (Resend or SMTP) is configured. Open the link from there to complete the flow.
 
 ### Scripts
 
@@ -208,7 +208,9 @@ All variables are documented in [`.env.example`](.env.example).
 | `BETTER_AUTH_URL` | ✅ | Public URL of the app (auth callbacks, email links) |
 | `NEXT_PUBLIC_APP_URL` | ✅ | Same as above, exposed to the browser |
 | `GEMINI_API_KEY` | For AI features | Google Gemini key for triage, SOAP drafts and summaries |
-| `RESEND_API_KEY`, `EMAIL_FROM` | ✅ in production | Transactional email. In development, emails print to the console when unset |
+| `EMAIL_FROM` | ✅ in production | Sender address. With Gmail SMTP it must match `SMTP_USER` (defaults to it when empty) |
+| `RESEND_API_KEY` | One email provider in production | Resend delivery. Needs a domain verified in Resend |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | One email provider in production | SMTP delivery via Nodemailer, e.g. Gmail with an app password. Used when Resend isn't configured |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional | Enables "Continue with Google". Redirect URI: `{BETTER_AUTH_URL}/api/auth/callback/google` |
 | `NEXT_PUBLIC_SOCKET_URL`, `SOCKET_PORT` | For chat | Where the Socket.IO server listens |
 | `SEED_DOCTOR_PASSWORD` | Seeding | Password for demo doctor accounts |
@@ -282,7 +284,7 @@ The app targets **Vercel + Neon**:
 1. Create a Neon database and set `DATABASE_URL` in the Vercel project.
 2. Set the remaining variables from `.env.example`. Variables marked **Sensitive** in Vercel can't be read back later, so keep a copy in your secret manager.
 3. Run migrations as part of your release (`npx prisma migrate deploy`).
-4. Configure Resend (`RESEND_API_KEY`, `EMAIL_FROM` on a verified domain). In production, the app refuses to silently skip auth emails.
+4. Configure email: either Resend (`RESEND_API_KEY`, `EMAIL_FROM` on a verified domain) or SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`; Gmail with an app password works). In production, the app refuses to silently skip auth emails.
 5. Deploy the Socket.IO server (`server.ts`) to a host that supports long-lived WebSocket connections, then point `NEXT_PUBLIC_SOCKET_URL` at it.
 
 ---
