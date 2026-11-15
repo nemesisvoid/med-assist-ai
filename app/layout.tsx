@@ -23,8 +23,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'ClinicAI',
-  description: 'A patient management app.',
+  title: { default: 'Med Assist AI', template: '%s · MedAssist AI' },
+
+  description:
+    'Med Assist AI is a web application that provides medical assistance and information using AI. It offers features such as symptom checking, medical advice, and health-related resources to help users make informed decisions about their health.',
 };
 
 export default function RootLayout({
