@@ -91,7 +91,7 @@ interface GetUserStatusPayload {
 
 // ─── Connection handler ───────────────────────────────────────────────────────────
 
-io.on('connection', async (socket) => {
+io.on('connection', async socket => {
   const userId = socket.handshake.query.userId as string;
 
   if (!userId || typeof userId !== 'string') {
@@ -197,7 +197,6 @@ io.on('connection', async (socket) => {
     }
   });
 
-
   // ── Typing indicator ─────────────────────────────────────────────────────────
   socket.on('typing', ({ conversationId, userId: typingUserId, isTyping }: TypingPayload) => {
     // Broadcast to everyone else in the room
@@ -240,7 +239,7 @@ io.on('connection', async (socket) => {
 
 // ─── Start ────────────────────────────────────────────────────────────────────────
 
-const PORT = parseInt(process.env.SOCKET_PORT ?? '3001', 10);
+const PORT = parseInt(process.env.PORT ?? process.env.SOCKET_PORT ?? '3001', 10);
 
 httpServer.listen(PORT, () => {
   console.log(`✅ Socket.io server running on http://localhost:${PORT}`);
