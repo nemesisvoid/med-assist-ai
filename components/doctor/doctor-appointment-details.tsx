@@ -31,7 +31,7 @@ import {
   requestUpdatedIntakeAction,
   applySoapDraftAction,
 } from '@/actions/doctor.action';
-import { cn, formatEnums, getAppointmentStatusStyle, getPriorityStyle, getRiskLevelStyle } from '@/lib/utils';
+import { cn, formatEnums, getAppointmentStatusStyle, getPriorityStyle, getRiskLevelStyle, formatDoctorName } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -541,7 +541,7 @@ export default function DoctorAppointmentDetails({ appointment: initialAppointme
                               </span>
                             </div>
                             <p className='text-[11px] text-slate-500 font-medium mt-0.5'>
-                              Appointment of type {appointment.appointmentType} created with Dr. {appointment.doctor?.name || 'Unassigned'}.
+                              Appointment of type {appointment.appointmentType} created with {appointment.doctor?.name ? formatDoctorName(appointment.doctor.name) : 'an unassigned doctor'}.
                             </p>
                           </div>
                         </div>

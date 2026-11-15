@@ -12,7 +12,7 @@ import AppointmentsChartWidget from '@/components/doctor/appointments-chart-widg
 import { getLoggedInUser } from '@/lib/get-user';
 import { getDoctorProfile, getDoctorsAppointments, getRecentPatients } from '@/actions/doctor.action';
 import { getUserNotifications } from '@/actions/patient.action';
-import { cn } from '@/lib/utils';
+import { cn, formatDoctorName } from '@/lib/utils';
 
 import {
   ArrowRightIcon,
@@ -73,7 +73,7 @@ const DoctorDashboardPage = async () => {
               Clinical Workspace Active
             </div>
             <h1 className='text-3xl font-extrabold text-white tracking-tight'>
-              Welcome back, <span className='bg-gradient-to-r from-blue-400 via-teal-300 to-emerald-400 bg-clip-text text-transparent'>Dr. {session.user.name}</span>
+              Welcome back, <span className='bg-gradient-to-r from-blue-400 via-teal-300 to-emerald-400 bg-clip-text text-transparent'>{formatDoctorName(session.user.name)}</span>
             </h1>
             <p className='text-slate-400 text-sm max-w-xl leading-relaxed'>
               Review upcoming appointments, update patient intake documentation, and manage diagnostic reports seamlessly from your clinical dashboard.

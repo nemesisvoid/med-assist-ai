@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDoctorName } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { Calendar, User, ShieldCheck, ArrowRight } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -40,7 +41,7 @@ export default function PatientAppointmentSidebar({ appointment, isCompleted, is
                 </AvatarFallback>
               </Avatar>
               <div className='min-w-0'>
-                <p className='text-sm font-bold text-slate-800 truncate'>Dr. {doctor.name}</p>
+                <p className='text-sm font-bold text-slate-800 truncate'>{formatDoctorName(doctor.name)}</p>
                 {doctorProfile?.specialty && (
                   <p className='text-xs text-slate-500 truncate'>{doctorProfile.specialty}</p>
                 )}

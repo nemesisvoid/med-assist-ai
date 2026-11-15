@@ -1,7 +1,7 @@
 'use client';
 
 import { Calendar, Clock, CheckCircle2 } from 'lucide-react';
-import { cn, formatEnums } from '@/lib/utils';
+import { cn, formatEnums, formatDoctorName } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
@@ -62,7 +62,7 @@ export default function PatientAppointmentDetails({ appointment }: Props) {
               </div>
 
               <p className='text-xs text-slate-500 font-medium truncate'>
-                {doctor ? `Dr. ${doctor.name}` : 'Doctor not yet assigned'}&nbsp;
+                {doctor ? formatDoctorName(doctor.name) : 'Doctor not yet assigned'}&nbsp;
                 {doctorProfile?.specialty && (
                   <span className='text-slate-400'>· {doctorProfile.specialty}</span>
                 )}
