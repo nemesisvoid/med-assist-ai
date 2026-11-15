@@ -119,13 +119,28 @@ const AppointmentsPage = async ({ searchParams }: { searchParams: SearchParams }
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className='hidden whitespace-nowrap text-sm text-slate-700 md:table-cell'>
-                    {formatDate(a.scheduledAt)}
-                    {a.scheduledTime && <span className='block text-xs text-slate-500'>{a.scheduledTime}</span>}
+                  <TableCell className='hidden whitespace-nowrap text-sm md:table-cell'>
+                    <Link
+                      href={`/admin/appointments/${a.id}`}
+                      className='group block rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600'>
+                      <span className='block font-medium text-slate-800 group-hover:text-blue-600 group-hover:underline'>{formatDate(a.scheduledAt)}</span>
+                      {a.scheduledTime && <span className='block text-xs text-slate-500'>{a.scheduledTime}</span>}
+                    </Link>
                   </TableCell>
-                  <TableCell className='hidden text-sm text-slate-600 lg:table-cell'>{a.appointmentType}</TableCell>
+                  <TableCell className='hidden text-sm lg:table-cell'>
+                    <Link
+                      href={`/admin/appointments/${a.id}`}
+                      className='text-slate-600 hover:text-blue-600 hover:underline'>
+                      {a.appointmentType}
+                    </Link>
+                  </TableCell>
                   <TableCell>
-                    <AppointmentStatusBadge status={a.status} />
+                    <Link
+                      href={`/admin/appointments/${a.id}`}
+                      aria-label={`View appointment details (${formatEnums(a.status.toLowerCase())})`}
+                      className='inline-flex rounded-full transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600'>
+                      <AppointmentStatusBadge status={a.status} />
+                    </Link>
                   </TableCell>
                   <TableCell className='hidden sm:table-cell'>
                     <PriorityBadge priority={a.priority} />
