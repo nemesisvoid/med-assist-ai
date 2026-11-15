@@ -1,72 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { adminRoutes, apiRoutes, authRoutes, doctorRoutes, patientRoutes } from './routes';
+import { adminRoutes, apiRoutes, authRoutes, doctorRoutes, getDashboardPath, LOGIN_PATH, patientRoutes } from './routes';
+
+const matches = (pathname: string, routes: string[]) => routes.some(route => pathname === route || pathname.startsWith(`${route}/`));
 
 export async function proxy(req: NextRequest) {
-  const res = NextResponse.next();
   const { nextUrl } = req;
+  const { pathname } = nextUrl;
 
-  const session = await auth.api.getSession({
-    headers: req.headers,
-  });
+  if (pathname.startsWith(apiRoutes)) return NextResponse.next();
 
-  const isLoggedIn = !!session;
+  const session = await auth.api.getSession({ headers: req.headers });
   const role = session?.user?.role;
-  const isLoggedInUserPatient = role === 'PATIENT';
-  const isLoggedInUserDoctor = role === 'DOCTOR';
-  const isLoggedInUserAdmin = role === 'ADMIN';
 
-  console.log({
-    pathname: nextUrl.pathname,
-    role,
-    isLoggedIn,
-  });
+  const isPatientRoute = matches(pathname, patientRoutes);
+  const isDoctorRoute = matches(pathname, doctorRoutes);
+  const isAdminRoute = matches(pathname, adminRoutes);
+  const isAuthRoute = matches(pathname, authRoutes);
 
-  const isPatientRoute = patientRoutes.some(route => nextUrl.pathname.startsWith(route));
-
-  const isDoctorRoute = doctorRoutes.some(route => nextUrl.pathname.startsWith(route));
-
-  const isAuthRoute = authRoutes.some(route => nextUrl.pathname.startsWith(route));
-
-  const isAdminRoute = adminRoutes.some(route => nextUrl.pathname.startsWith(route));
-
-  const isProtectedRoutes = isPatientRoute || isDoctorRoute || isAdminRoute;
-
-  const isApiAuthRoute = nextUrl.pathname.startsWith(apiRoutes);
-
-  if (isApiAuthRoute) return res;
-
-  if (isProtectedRoutes) {
-    if (!isLoggedIn) {
-      return NextResponse.redirect(new URL('/auth/login', nextUrl));
+  if (isPatientRoute || isDoctorRoute || isAdminRoute) {
+    if (!session) {
+      const loginUrl = new URL(LOGIN_PATH, nextUrl);
+      loginUrl.searchParams.set('next', `${pathname}${nextUrl.search}`);
+      return NextResponse.redirect(loginUrl);
     }
 
-    if (isPatientRoute && !isLoggedInUserPatient) {
-      return NextResponse.redirect(new URL('/auth/login', nextUrl));
-    }
+    const hasAccess =
+      (isPatientRoute && role === 'PATIENT') || (isDoctorRoute && role === 'DOCTOR') || (isAdminRoute && role === 'ADMIN');
 
-    if (isDoctorRoute && !isLoggedInUserDoctor) {
-      return NextResponse.redirect(new URL('/auth/login', nextUrl));
-    }
-
-    if (isAdminRoute && !isLoggedInUserAdmin) {
-      return NextResponse.redirect(new URL('/auth/login', nextUrl));
-    }
+    // Signed in but on another role's area: send them to their own dashboard.
+    if (!hasAccess) return NextResponse.redirect(new URL(getDashboardPath(role), nextUrl));
   }
 
-  if (isAuthRoute && isLoggedIn) {
-    if (isLoggedInUserPatient) {
-      return NextResponse.redirect(new URL('/patient/dashboard', nextUrl));
-    }
-    if (isLoggedInUserDoctor) {
-      return NextResponse.redirect(new URL('/doctor/dashboard', nextUrl));
-    }
-    if (isLoggedInUserAdmin) {
-      return NextResponse.redirect(new URL('/admin/dashboard', nextUrl));
-    }
+  if (isAuthRoute && session) {
+    return NextResponse.redirect(new URL(getDashboardPath(role), nextUrl));
   }
 
-  return res;
+  return NextResponse.next();
 }
 
 export const config = {

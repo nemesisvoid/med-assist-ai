@@ -6,16 +6,35 @@ export const LoginFormSchema = z.object({
   password: z.string().min(1, { message: 'Password is required' }),
 });
 
+const NewPasswordField = z
+  .string()
+  .min(8, { message: 'Password must be at least 8 characters' })
+  .max(128, { message: 'Password must be at most 128 characters' });
+
 export const CreateAccountSchema = z.object({
   mode: z.literal('create'),
-  name: z.string().min(5, { message: 'Full Name is required' }),
+  name: z.string().trim().min(2, { message: 'Full name is required' }).max(100),
   email: z.email({ message: 'Enter a valid email' }),
-  password: z.string().min(8, { message: 'Password must be at least 8 characters' }),
+  password: NewPasswordField,
 });
 
 export const AuthSchema = z.discriminatedUnion('mode', [LoginFormSchema, CreateAccountSchema]);
 
 export type AuthFormData = z.infer<typeof AuthSchema>;
+
+export const ForgotPasswordSchema = z.object({
+  email: z.email({ message: 'Enter a valid email' }),
+});
+
+export const ResetPasswordSchema = z
+  .object({
+    password: NewPasswordField,
+    confirmPassword: z.string().min(1, { message: 'Please confirm your password' }),
+  })
+  .refine(data => data.password === data.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
 
 export const AppointmentFormSchema = z.object({
   appointmentReason: z.string().min(1),

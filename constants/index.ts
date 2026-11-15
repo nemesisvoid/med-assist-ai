@@ -9,6 +9,11 @@ import {
   HomeIcon,
   MessageSquareIcon,
   AlertCircleIcon,
+  CalendarCheckIcon,
+  LayoutDashboardIcon,
+  ScrollTextIcon,
+  StethoscopeIcon,
+  UsersIcon,
 } from 'lucide-react';
 
 export const patientSidebarLinks = [
@@ -189,5 +194,24 @@ export const doctors = [
     experience: 14,
     bio: 'Pulmonary specialist with critical care expertise.',
     image: 'https://randomuser.me/api/portraits/men/45.jpg',
+  },
+];
+
+export const adminSidebarSections = [
+  {
+    label: 'Overview',
+    links: [{ name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboardIcon }],
+  },
+  {
+    label: 'Management',
+    links: [
+      { name: 'Users', href: '/admin/users', icon: UsersIcon },
+      { name: 'Doctors', href: '/admin/doctors', icon: StethoscopeIcon },
+      { name: 'Appointments', href: '/admin/appointments', icon: CalendarCheckIcon },
+    ],
+  },
+  {
+    label: 'Compliance',
+    links: [{ name: 'Audit Log', href: '/admin/audit-logs', icon: ScrollTextIcon }],
   },
 ];
