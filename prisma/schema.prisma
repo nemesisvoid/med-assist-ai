@@ -78,6 +78,22 @@ enum DoctorAvailabilityStatus {
   ON_LEAVE
 }
 
+enum AuditAction {
+  USER_SIGNED_UP
+  USER_SIGNED_IN
+  PASSWORD_RESET
+  USER_ROLE_CHANGED
+  USER_SUSPENDED
+  USER_REACTIVATED
+  USER_SESSIONS_REVOKED
+  DOCTOR_INVITED
+  DOCTOR_INVITE_RESENT
+  DOCTOR_AVAILABILITY_CHANGED
+  APPOINTMENT_REASSIGNED
+  APPOINTMENT_CANCELLED
+  PATIENT_RECORD_VIEWED
+}
+
 enum MessageStatus {
   SENT
   DELIVERED
@@ -95,6 +111,11 @@ model User {
   role          Role      @default(PATIENT)
   isOnline Boolean @default(false)
   lastSeen DateTime?
+
+  // Account suspension (managed by admins). Suspended users cannot create sessions.
+  banned    Boolean   @default(false)
+  banReason String?
+  bannedAt  DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   sessions      Session[]
@@ -120,6 +141,8 @@ model User {
 
   patientConversations Conversation[] @relation("PatientConversations")
   doctorConversations  Conversation[] @relation("DoctorConversations")
+
+  auditLogs AuditLog[] @relation("AuditActor")
 
   @@unique([email])
   @@map("user")
@@ -428,4 +451,33 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+// =====================================================
+// AUDIT LOG
+// =====================================================
+
+// Append-only record of security- and privacy-relevant events (HIPAA audit controls).
+// Never store clinical content here — only who did what, to which record, and when.
+model AuditLog {
+  id String @id @default(cuid())
+
+  actorId    String?
+  action     AuditAction
+  entityType String
+  entityId   String?
+  summary    String
+  metadata   Json?
+  ipAddress  String?
+  userAgent  String?
+
+  createdAt DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_log")
 }

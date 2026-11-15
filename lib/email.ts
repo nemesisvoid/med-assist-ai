@@ -119,8 +119,8 @@ export function staffInviteEmail({ name, url, role }: { name: string; url: strin
       body: `Hi ${safeName}, an administrator has created a ${safeRole} account for you. Set your password to activate your account and sign in.`,
       ctaLabel: 'Set your password',
       ctaUrl: url,
-      footnote: 'This invitation link expires in 72 hours. Contact your administrator if it has expired.',
+      footnote: 'For your security this link expires in 1 hour and can only be used once. If it has expired, ask your administrator to resend the invitation.',
     }),
-    text: `Hi ${name},\n\nAn administrator created a ${role.toLowerCase()} account for you on ${APP_NAME}. Set your password:\n${url}\n\nThis link expires in 72 hours.`,
+    text: `Hi ${name},\n\nAn administrator created a ${role.toLowerCase()} account for you on ${APP_NAME}. Set your password:\n${url}\n\nThis link expires in 1 hour. Ask your administrator to resend it if it expires.`,
   };
 }

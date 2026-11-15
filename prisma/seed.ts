@@ -39,7 +39,34 @@ async function seedDoctors() {
   }
 }
 
+/**
+ * Creates the first administrator when SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD are set.
+ * Admin accounts can't be created through public sign-up (roles are server-assigned).
+ */
+async function seedAdmin() {
+  const email = process.env.SEED_ADMIN_EMAIL?.toLowerCase();
+  const password = process.env.SEED_ADMIN_PASSWORD;
+  if (!email || !password) {
+    console.log('- skipping admin (set SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD to create one)');
+    return;
+  }
+
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    if (existing.role !== 'ADMIN') await prisma.user.update({ where: { id: existing.id }, data: { role: 'ADMIN', emailVerified: true } });
+    console.log(`- admin ${email} already exists (ensured ADMIN role)`);
+    return;
+  }
+
+  const res = await auth.api.signUpEmail({
+    body: { email, password, name: process.env.SEED_ADMIN_NAME ?? 'Platform Admin' },
+  });
+  await prisma.user.update({ where: { id: res.user.id }, data: { role: 'ADMIN', emailVerified: true } });
+  console.log(`+ seeded admin ${email}`);
+}
+
 async function main() {
+  await seedAdmin();
   await seedDoctors();
   console.log('Seed completed successfully');
 }

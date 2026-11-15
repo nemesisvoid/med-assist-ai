@@ -9,6 +9,7 @@ import { getAge } from '@/lib/utils';
 import { startOfDay, subDays, subMonths, startOfYear, format } from 'date-fns';
 import { clinicalNotesSchema } from '@/schema/validators';
 import { AppointmentStatus } from '@/generated/prisma/enums';
+import { recordAudit } from '@/lib/audit';
 
 const ai = new GoogleGenAI({});
 
@@ -757,6 +758,15 @@ export const getPatientFullRecord = async (patientId: string, doctorId: string) 
           }
         }
       }
+    });
+
+    // HIPAA access log: record every view of a full patient record.
+    await recordAudit({
+      actorId: doctorId,
+      action: 'PATIENT_RECORD_VIEWED',
+      entityType: 'PatientRecord',
+      entityId: patientId,
+      summary: 'Viewed full medical record',
     });
 
     return record;

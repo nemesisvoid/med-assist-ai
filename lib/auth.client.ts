@@ -27,6 +27,8 @@ export function getAuthErrorMessage(error: { code?: string; message?: string; st
       return 'Password is too long.';
     case 'INVALID_TOKEN':
       return 'This link is invalid or has expired. Please request a new one.';
+    case 'BANNED_USER':
+      return 'This account has been suspended. Contact support for help.';
     default:
       return error.message || 'Something went wrong. Please try again.';
   }

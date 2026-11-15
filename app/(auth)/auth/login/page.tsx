@@ -14,6 +14,7 @@ const errorMessages: Record<string, string> = {
   invalid_token: 'That verification link is invalid or has expired. Sign in to receive a new one.',
   token_expired: 'That verification link has expired. Sign in to receive a new one.',
   session_expired: 'Your session has ended. Please sign in again.',
+  banned_user: 'This account has been suspended. Contact support for help.',
 };
 
 const LoginPage = async ({ searchParams }: { searchParams: SearchParams }) => {

@@ -20,6 +20,8 @@ const Header = async () => {
   const session = await getLoggedInUser();
   const user = session?.user;
   const role = user?.role || 'PATIENT';
+  const isAdmin = role === 'ADMIN';
+  const title = role === 'PATIENT' ? 'My Health Dashboard' : isAdmin ? 'Admin Console' : 'Provider Dashboard';
 
   let unread = 0;
   if (user) {
@@ -47,13 +49,14 @@ const Header = async () => {
         <SidebarTrigger className="-ml-2 text-slate-500 hover:text-slate-800" />
         <div className="flex flex-col gap-0.5">
           <h2 className="text-lg sm:text-xl font-extrabold text-slate-800 tracking-tight">
-            {role === 'PATIENT' ? 'My Health Dashboard' : 'Provider Dashboard'}
+            {title}
           </h2>
           <p className="text-sm font-semibold text-slate-500 hidden sm:block">{getCurrentDate()}</p>
         </div>
       </div>
 
       <div className="flex items-center gap-5 sm:gap-6">
+        {!isAdmin && (
         <div className="relative hidden md:flex items-center">
           <SearchIcon className="absolute left-3.5 size-4.5 text-slate-400" strokeWidth={2.5} />
           <Input 
@@ -61,6 +64,7 @@ const Header = async () => {
             className="w-64 pl-10 h-10 bg-slate-50/80 border-slate-200/80 text-sm font-medium rounded-full focus-visible:ring-blue-500 focus-visible:bg-white transition-all shadow-inner"
           />
         </div>
+        )}
 
         {role === 'PATIENT' && (
           <Link
@@ -72,7 +76,8 @@ const Header = async () => {
           </Link>
         )}
 
-        <div className="flex items-center gap-4 sm:gap-5 border-l border-slate-200 pl-5 sm:pl-6">
+        <div className={`flex items-center gap-4 sm:gap-5 ${isAdmin ? '' : 'border-l border-slate-200 pl-5 sm:pl-6'}`}>
+          {!isAdmin && (
           <Link 
             href={role === 'PATIENT' ? '/patient/notification' : '/doctor/notification'} 
             className="relative p-2.5 rounded-full hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition-colors active:scale-95"
@@ -84,6 +89,7 @@ const Header = async () => {
               </span>
             )}
           </Link>
+          )}
 
           <DropdownMenu>
             <DropdownMenuTrigger className="outline-none focus:outline-none">
@@ -109,11 +115,19 @@ const Header = async () => {
                 <DropdownMenuLabel className="font-bold text-slate-800">My Account</DropdownMenuLabel>
               </DropdownMenuGroup>
               <DropdownMenuSeparator className="bg-slate-100" />
-              <DropdownMenuItem className="cursor-pointer hover:bg-slate-50 hover:text-blue-600 rounded-lg p-0">
-                <Link href={role === 'PATIENT' ? '/patient/profile' : '/doctor/profile'} className="w-full h-full flex items-center px-2 py-1.5">
-                  Profile Settings
-                </Link>
-              </DropdownMenuItem>
+              {isAdmin ? (
+                <DropdownMenuItem className="cursor-pointer hover:bg-slate-50 hover:text-blue-600 rounded-lg p-0">
+                  <Link href="/admin/audit-logs" className="w-full h-full flex items-center px-2 py-1.5">
+                    Audit Log
+                  </Link>
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem className="cursor-pointer hover:bg-slate-50 hover:text-blue-600 rounded-lg p-0">
+                  <Link href={role === 'PATIENT' ? '/patient/profile' : '/doctor/profile'} className="w-full h-full flex items-center px-2 py-1.5">
+                    Profile Settings
+                  </Link>
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
