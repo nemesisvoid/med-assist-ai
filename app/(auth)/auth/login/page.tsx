@@ -1,57 +1,34 @@
+import type { Metadata } from 'next';
 import AuthForm from '@/components/auth-form';
-import { HeartIcon, ShieldIcon, StarsIcon } from 'lucide-react';
+import AuthShell from '@/components/auth/auth-shell';
+import { isGoogleAuthEnabled } from '@/lib/auth';
 
-const LoginPage = () => {
+export const metadata: Metadata = {
+  title: 'Sign in · MedAssist AI',
+};
+
+type SearchParams = Promise<{ mode?: string; next?: string; error?: string; reset?: string }>;
+
+const errorMessages: Record<string, string> = {
+  oauth: "We couldn't sign you in with Google. Please try again.",
+  invalid_token: 'That verification link is invalid or has expired. Sign in to receive a new one.',
+  token_expired: 'That verification link has expired. Sign in to receive a new one.',
+  session_expired: 'Your session has ended. Please sign in again.',
+};
+
+const LoginPage = async ({ searchParams }: { searchParams: SearchParams }) => {
+  const { mode, next, error, reset } = await searchParams;
+
   return (
-    <main className='grid grid-cols-2 min-h-screen'>
-      <div className='flex flex-col gap-4 login-card-gradient  relative overflow-hidden p-20 top-right-circle bottom-circle'>
-        <span
-          className='mid-circle'
-          aria-hidden
-        />
-        <div className='mb-25'>
-          <h1 className='text-white text-2xl font-bold'>MedAssist AI</h1>
-          <p className='text-text-muted text-xs uppercase font-medium'>Patient Portal</p>
-        </div>
-
-        <div>
-          <h3 className='text-sm text-[#93c5fd] font-medium bg-[#1677ff33] flex items-center gap-2 w-fit rounded-xl px-3 py-1 border border-[#1677ff59] mb-4'>
-            <StarsIcon className='size-4' />
-            AI-Powered TeleHealth
-          </h3>
-
-          <div className='mb-8'>
-            <h2 className='text-white text-3xl font-bold mb-4'>
-              Your health, <br /> expertly managed.
-            </h2>
-            <p className='text-sm text-white/60'>
-              Book appointments, receive AI-assisted clinical notes, and stay connected with your care <br /> team — all in one secure place.
-            </p>
-          </div>
-
-          <div className='flex flex-col gap-4'>
-            <div className='flex items-center gap-3'>
-              <ShieldIcon className='text-white size-5' />
-              <p className='text-white/80 text-sm'>Secure & HIPAA-compliant data protection</p>
-            </div>
-
-            <div className='flex items-center gap-3'>
-              <StarsIcon className='text-white size-5' />
-              <p className='text-white/80 text-sm'>AI risk analysis on every appointment</p>
-            </div>
-
-            <div className='flex items-center gap-3'>
-              <HeartIcon className='text-white size-5' />
-              <p className='text-white/80 text-sm'>Personalized, continuous health tracking</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className='bg-accent-soft'>
-        <AuthForm />
-      </div>
-    </main>
+    <AuthShell>
+      <AuthForm
+        initialMode={mode === 'create' ? 'create' : 'login'}
+        next={next}
+        googleEnabled={isGoogleAuthEnabled}
+        initialError={error ? (errorMessages[error.toLowerCase()] ?? 'Something went wrong. Please sign in again.') : undefined}
+        initialNotice={reset === 'success' ? 'Your password has been updated. Sign in with your new password.' : undefined}
+      />
+    </AuthShell>
   );
 };
 
