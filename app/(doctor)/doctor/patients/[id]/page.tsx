@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { format } from 'date-fns';
 import { getLoggedInUser } from '@/lib/get-user';
 import { getPatientFullRecord } from '@/actions/doctor.action';
-import { getAge } from '@/lib/utils';
+import { getAge, formatDoctorName } from '@/lib/utils';
 import { 
   ArrowLeft, 
   User, 
@@ -171,7 +171,7 @@ export default async function PatientRecordPage({ params }: { params: Promise<{ 
                             <ExternalLink className="w-4 h-4" />
                           </Link>
                         </div>
-                        <p className="text-sm text-slate-500 mt-1">Dr. {appt.doctor?.name} ({appt.doctor?.doctorProfile?.specialty})</p>
+                        <p className="text-sm text-slate-500 mt-1">{formatDoctorName(appt.doctor?.name)} ({appt.doctor?.doctorProfile?.specialty})</p>
                       </div>
                       <Badge variant={appt.status === 'COMPLETED' ? 'default' : 'secondary'} className={appt.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : ''}>
                         {appt.status.replace('_', ' ')}

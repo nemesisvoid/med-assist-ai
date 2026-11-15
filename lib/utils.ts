@@ -94,3 +94,9 @@ export const getPriorityStyle = (priority: string) => {
       return "bg-slate-50 text-slate-700 border-slate-200/60";
   }
 }
+
+/** Prefixes "Dr." unless the stored name already includes a title. */
+export const formatDoctorName = (name?: string | null) => {
+  if (!name) return 'Doctor';
+  return /^dr\.?\s/i.test(name.trim()) ? name.trim() : `Dr. ${name.trim()}`;
+};
