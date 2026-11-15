@@ -242,8 +242,8 @@ const ChatSection = ({ selectedConversationId, selectedConversation, userId, use
                             </div>
                             <Link
                                 href={userRole === 'DOCTOR'
-                                    ? `/doctor/appointments/${activeAppt.id}`
-                                    : `/patient/appointments/${activeAppt.id}`}
+                                    ? `/doctor/appointment/${activeAppt.id}`
+                                    : `/patient/appointment/${activeAppt.id}`}
                                 className='text-[11px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 hover:underline'
                             >
                                 View Appointment <ExternalLink size={10} />
@@ -490,8 +490,8 @@ const AppointmentSeparator = ({
                 {apptMeta.id && (
                     <Link
                         href={userRole === 'DOCTOR'
-                            ? `/doctor/appointments/${apptMeta.id}`
-                            : `/patient/appointments/${apptMeta.id}`}
+                            ? `/doctor/appointment/${apptMeta.id}`
+                            : `/patient/appointment/${apptMeta.id}`}
                         className='text-[10px] text-blue-500 hover:underline flex items-center gap-0.5'
                     >
                         View <ExternalLink size={8} />

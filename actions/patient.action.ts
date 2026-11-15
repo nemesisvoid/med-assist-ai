@@ -1,21 +1,9 @@
 'use server';
 
-import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 
 const ai = new GoogleGenAI({});
 
-async function main() {
-  const prompt = "Explain the concept of Occam's Razor and provide a simple, everyday example.";
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: prompt,
-  });
-
-  console.log(response.text);
-}
-
-main();
 import { prisma } from '@/lib/prisma';
 import { AppointmentFormSchema, PatientInTakeFormSchema, PatientProfileFormSchema } from '@/validations/validation';
 import { revalidatePath } from 'next/cache';

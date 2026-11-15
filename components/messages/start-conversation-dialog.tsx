@@ -229,7 +229,7 @@ export default function StartConversationDialog({
 
                   if (isPendingIntake) {
                     onOpenChange(false);
-                    router.push(`/patient/appointments/${appt.id}`);
+                    router.push(`/patient/appointment/${appt.id}`);
                   } else if (hasExistingConversation) {
                     // Open the existing conversation directly
                     onConversationCreated(appt.existingConversationId!);
