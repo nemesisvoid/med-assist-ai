@@ -235,7 +235,7 @@ export default async function PatientRecordPage({ params }: { params: Promise<{ 
                             <ExternalLink className="w-4 h-4" />
                           </Link>
                         </div>
-                        <p className="text-xs text-slate-500 mt-0.5">By Dr. {appt.doctor?.name}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">By {formatDoctorName(appt.doctor?.name)}</p>
                       </div>
                       <Badge variant="secondary" className="bg-slate-100 text-slate-600">
                         {appt.appointmentType}
