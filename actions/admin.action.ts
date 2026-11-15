@@ -267,7 +267,7 @@ export async function reassignAppointment(input: z.input<typeof ReassignAppointm
       metadata: { fromDoctorId: appointment.doctorId, toDoctorId: doctorId },
     });
 
-    revalidateAdmin('/admin/appointments', '/admin/doctors');
+    revalidateAdmin('/admin/appointments', `/admin/appointments/${appointmentId}`, '/admin/doctors');
     return { ok: true, message: `Assigned to ${doctor.name}.` };
   });
 }
@@ -301,7 +301,7 @@ export async function cancelAppointment(input: z.input<typeof CancelAppointmentS
       metadata: { reason },
     });
 
-    revalidateAdmin('/admin/appointments');
+    revalidateAdmin('/admin/appointments', `/admin/appointments/${appointmentId}`);
     return { ok: true, message: 'Appointment cancelled and both parties notified.' };
   });
 }

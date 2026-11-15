@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarXIcon, EllipsisVerticalIcon, ShuffleIcon } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import Link from 'next/link';
+import { CalendarXIcon, EllipsisVerticalIcon, EyeIcon, ShuffleIcon } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cancelAppointment, reassignAppointment } from '@/actions/admin.action';
 import type { DoctorAvailabilityStatus } from '@/generated/prisma/enums';
-import { ActionDialog, fieldInputClass, fieldLabelClass, useAdminAction } from './action-dialog';
+import { ActionDialog, btnDanger, btnSecondary, fieldInputClass, fieldLabelClass, useAdminAction } from './action-dialog';
 import { cn } from '@/lib/utils';
 
 export type AssignableDoctor = {
@@ -31,7 +32,8 @@ type Props = {
   isOpen: boolean;
 };
 
-export const AppointmentRowActions = ({ appointmentId, patientName, currentDoctorId, doctors, isOpen }: Props) => {
+/** Reassign + cancel dialogs, shared by the table row menu and the detail page. */
+function useAppointmentDialogs({ appointmentId, patientName, currentDoctorId, doctors }: Omit<Props, 'isOpen'>) {
   const [dialog, setDialog] = useState<'reassign' | 'cancel' | null>(null);
   const [doctorId, setDoctorId] = useState('');
   const [reason, setReason] = useState('');
@@ -43,40 +45,13 @@ export const AppointmentRowActions = ({ appointmentId, patientName, currentDocto
     setReason('');
   };
 
-  if (!isOpen) return <span className='sr-only'>No actions available for closed appointments</span>;
-
   // Prefer clinicians who are available and have the lightest open caseload.
   const sorted = [...doctors]
     .filter(d => d.id !== currentDoctorId)
     .sort((a, b) => Number(b.availability === 'AVAILABLE') - Number(a.availability === 'AVAILABLE') || a.openAppointments - b.openAppointments);
 
-  return (
+  const dialogs = (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          aria-label={`Actions for ${patientName}'s appointment`}
-          className='flex size-9 cursor-pointer items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-blue-600 data-popup-open:bg-slate-100'>
-          <EllipsisVerticalIcon className='size-4' />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align='end'
-          className='w-52 p-1.5'>
-          <DropdownMenuItem
-            className='gap-2.5 px-2.5 py-2 text-[13px]'
-            onClick={() => setDialog('reassign')}>
-            <ShuffleIcon />
-            {currentDoctorId ? 'Reassign doctor' : 'Assign doctor'}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            variant='destructive'
-            className='gap-2.5 px-2.5 py-2 text-[13px]'
-            onClick={() => setDialog('cancel')}>
-            <CalendarXIcon />
-            Cancel appointment
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
       <ActionDialog
         open={dialog === 'reassign'}
         onOpenChange={o => !o && close()}
@@ -148,5 +123,79 @@ export const AppointmentRowActions = ({ appointmentId, patientName, currentDocto
         </div>
       </ActionDialog>
     </>
+  );
+
+  return { open: setDialog, dialogs };
+}
+
+/** Overflow menu for a row in the appointments table. */
+export const AppointmentRowActions = ({ appointmentId, patientName, currentDoctorId, doctors, isOpen }: Props) => {
+  const { open, dialogs } = useAppointmentDialogs({ appointmentId, patientName, currentDoctorId, doctors });
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          aria-label={`Actions for ${patientName}'s appointment`}
+          className='flex size-9 cursor-pointer items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-blue-600 data-popup-open:bg-slate-100'>
+          <EllipsisVerticalIcon className='size-4' />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align='end'
+          className='w-52 p-1.5'>
+          <DropdownMenuItem
+            className='gap-2.5 px-2.5 py-2 text-[13px]'
+            render={<Link href={`/admin/appointments/${appointmentId}`} />}>
+            <EyeIcon />
+            View details
+          </DropdownMenuItem>
+          {isOpen && (
+            <>
+              <DropdownMenuItem
+                className='gap-2.5 px-2.5 py-2 text-[13px]'
+                onClick={() => open('reassign')}>
+                <ShuffleIcon />
+                {currentDoctorId ? 'Reassign doctor' : 'Assign doctor'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant='destructive'
+                className='gap-2.5 px-2.5 py-2 text-[13px]'
+                onClick={() => open('cancel')}>
+                <CalendarXIcon />
+                Cancel appointment
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {isOpen && dialogs}
+    </>
+  );
+};
+
+/** Stacked action buttons for the appointment detail page. */
+export const AppointmentDetailActions = ({ appointmentId, patientName, currentDoctorId, doctors, isOpen }: Props) => {
+  const { open, dialogs } = useAppointmentDialogs({ appointmentId, patientName, currentDoctorId, doctors });
+  if (!isOpen) return <p className='text-xs leading-relaxed text-slate-500'>This appointment is closed, so it can no longer be reassigned or cancelled.</p>;
+
+  return (
+    <div className='flex flex-col gap-2'>
+      <button
+        type='button'
+        className={btnSecondary}
+        onClick={() => open('reassign')}>
+        <ShuffleIcon className='size-4' />
+        {currentDoctorId ? 'Reassign doctor' : 'Assign doctor'}
+      </button>
+      <button
+        type='button'
+        className={btnDanger}
+        onClick={() => open('cancel')}>
+        <CalendarXIcon className='size-4' />
+        Cancel appointment
+      </button>
+      {dialogs}
+    </div>
   );
 };

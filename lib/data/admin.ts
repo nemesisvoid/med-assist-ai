@@ -428,3 +428,48 @@ export async function listAuditLogs(params: { action?: AuditAction; q?: string; 
 
   return { items, total, page, pageCount: pageCount(total) };
 }
+
+/**
+ * Operational view of a single appointment for administrators.
+ * Only presence/timestamps of clinical artefacts are selected — never their content.
+ */
+export async function getAppointmentDetail(appointmentId: string) {
+  await requireAdmin();
+
+  const appointment = await prisma.appointment.findUnique({
+    where: { id: appointmentId },
+    select: {
+      id: true,
+      appointmentType: true,
+      scheduledAt: true,
+      scheduledTime: true,
+      durationMinutes: true,
+      status: true,
+      priority: true,
+      riskLevel: true,
+      requiresFollowUp: true,
+      createdAt: true,
+      updatedAt: true,
+      patient: { select: { id: true, name: true, email: true, image: true, banned: true, patientProfile: { select: { medicalRecordNumber: true } } } },
+      doctor: {
+        select: { id: true, name: true, email: true, image: true, banned: true, doctorProfile: { select: { specialty: true, availabilityStatus: true, imageUrl: true } } },
+      },
+      intakeForm: { select: { createdAt: true } },
+      clinicalNote: { select: { createdAt: true, updatedAt: true, _count: { select: { prescriptions: true } } } },
+      followUp: { select: { recommendedDate: true, nextAppointmentId: true } },
+      priorFollowUp: { select: { appointmentId: true } },
+      activeConversation: { select: { chatLocksAt: true } },
+      _count: { select: { messages: true } },
+    },
+  });
+  if (!appointment) return null;
+
+  const history = await prisma.auditLog.findMany({
+    where: { entityType: 'Appointment', entityId: appointmentId },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    include: { actor: { select: { id: true, name: true } } },
+  });
+
+  return { appointment, history };
+}
