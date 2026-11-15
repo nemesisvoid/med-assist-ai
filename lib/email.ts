@@ -1,15 +1,20 @@
 /**
  * Transactional email delivery.
  *
- * - When `RESEND_API_KEY` and `EMAIL_FROM` are set, emails are delivered through
- *   the Resend REST API (no SDK dependency required).
- * - In development without a provider, the email (including any action link) is
- *   printed to the server console so auth flows can be tested end-to-end.
- * - In production without a provider, sending fails loudly instead of silently
- *   dropping verification / password-reset emails.
- * - `EMAIL_TRANSPORT=console` forces console output in any environment (local
- *   production builds, demos). Never use it on a real deployment.
+ * The transport is picked from the environment, in this order:
+ *
+ * 1. `EMAIL_TRANSPORT=console` prints every email (including its action link) to
+ *    the server console, in any environment. For local demos only; never set it
+ *    on a real deployment.
+ * 2. Resend (`RESEND_API_KEY` + `EMAIL_FROM`), which needs a verified domain.
+ * 3. SMTP via Nodemailer (`SMTP_HOST` + `SMTP_USER` + `SMTP_PASS`), e.g. Gmail
+ *    with an app password. `EMAIL_FROM` defaults to `MedAssist AI <SMTP_USER>`.
+ * 4. Nothing configured: printed to the console in development; in production,
+ *    sending fails loudly instead of silently dropping verification and
+ *    password-reset emails.
  */
+
+import nodemailer, { type Transporter } from 'nodemailer';
 
 type EmailPayload = {
   to: string;
@@ -18,33 +23,93 @@ type EmailPayload = {
   text: string;
 };
 
+type EmailTransport = 'console' | 'resend' | 'smtp' | 'none';
+
 const APP_NAME = 'MedAssist AI';
 
-export async function sendEmail({ to, subject, html, text }: EmailPayload): Promise<void> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM;
-  const forceConsole = process.env.EMAIL_TRANSPORT === 'console';
+function resolveTransport(): EmailTransport {
+  const env = process.env;
+  if (env.EMAIL_TRANSPORT === 'console') return 'console';
+  if (env.RESEND_API_KEY && env.EMAIL_FROM) return 'resend';
+  if (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS) return 'smtp';
+  return 'none';
+}
 
-  if (forceConsole || !apiKey || !from) {
-    if (!forceConsole && process.env.NODE_ENV === 'production') {
-      throw new Error('Email provider is not configured. Set RESEND_API_KEY and EMAIL_FROM (or EMAIL_TRANSPORT=console for local demos).');
-    }
-    console.info(`\n[email:console] To: ${to}\n[email:console] Subject: ${subject}\n${text}\n`);
-    return;
+export async function sendEmail(payload: EmailPayload): Promise<void> {
+  const transport = resolveTransport();
+
+  switch (transport) {
+    case 'resend':
+      return sendWithResend(payload);
+    case 'smtp':
+      return sendWithSmtp(payload);
+    case 'none':
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error(
+          'Email provider is not configured. Set RESEND_API_KEY + EMAIL_FROM, or SMTP_HOST + SMTP_USER + SMTP_PASS (or EMAIL_TRANSPORT=console for local demos).',
+        );
+      }
+      return logToConsole(payload);
+    case 'console':
+      return logToConsole(payload);
   }
+}
 
+function logToConsole({ to, subject, text }: EmailPayload) {
+  console.info(`\n[email:console] To: ${to}\n[email:console] Subject: ${subject}\n${text}\n`);
+}
+
+async function sendWithResend({ to, subject, html, text }: EmailPayload): Promise<void> {
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ from, to, subject, html, text }),
+    body: JSON.stringify({ from: process.env.EMAIL_FROM, to, subject, html, text }),
   });
 
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`Failed to send email (${res.status}): ${body}`);
+    throw new Error(`Failed to send email via Resend (${res.status}): ${body}`);
+  }
+}
+
+// Reused across calls within the same server instance / warm serverless invocation.
+let smtpTransporter: Transporter | undefined;
+
+function getSmtpTransporter(): Transporter {
+  if (smtpTransporter) return smtpTransporter;
+
+  const port = Number(process.env.SMTP_PORT || 465);
+  // Port 465 uses implicit TLS. Other ports must upgrade with STARTTLS, unless
+  // SMTP_SECURE="false" is set explicitly (local mail catchers such as Mailpit).
+  const secure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : port === 465;
+  const allowPlaintext = process.env.SMTP_SECURE === 'false';
+
+  smtpTransporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port,
+    secure,
+    requireTLS: !secure && !allowPlaintext,
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 20_000,
+  });
+
+  return smtpTransporter;
+}
+
+async function sendWithSmtp({ to, subject, html, text }: EmailPayload): Promise<void> {
+  const from = process.env.EMAIL_FROM || `${APP_NAME} <${process.env.SMTP_USER}>`;
+
+  try {
+    await getSmtpTransporter().sendMail({ from, to, subject, html, text });
+  } catch (error) {
+    // Never include credentials; nodemailer errors carry only the SMTP response.
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to send email via SMTP: ${detail}`);
   }
 }
 
