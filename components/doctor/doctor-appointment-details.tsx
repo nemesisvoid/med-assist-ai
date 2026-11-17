@@ -26,12 +26,13 @@ import {
   getDoctorAppointmentById,
   saveClinicalNoteAction,
   generateSoapDraftAction,
+  retryTriageAction,
   markAppointmentCompleteAction,
   sendPatientNotificationAction,
   requestUpdatedIntakeAction,
   applySoapDraftAction,
 } from '@/actions/doctor.action';
-import { cn, formatEnums, getAppointmentStatusStyle, getPriorityStyle, getRiskLevelStyle, formatDoctorName } from '@/lib/utils';
+import { cn, formatEnums, formatRiskLabel, getAppointmentStatusStyle, getPriorityStyle, getRiskLevelStyle, formatDoctorName } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -149,6 +150,18 @@ export default function DoctorAppointmentDetails({ appointment: initialAppointme
         setActiveTab('ai-draft');
       } else {
         toast.error(res.message || 'Failed to generate AI SOAP draft');
+      }
+    });
+  };
+
+  const handleRetryTriage = () => {
+    startTransition(async () => {
+      const res = await retryTriageAction(appointment.id);
+      if (res.success) {
+        toast.success(res.message);
+        await refreshAppointmentState();
+      } else {
+        toast.error(res.message);
       }
     });
   };
@@ -324,9 +337,9 @@ export default function DoctorAppointmentDetails({ appointment: initialAppointme
                       variant='outline'
                       className={cn(
                         'text-[10px] font-bold px-2 py-0 h-4.5 rounded-full border shadow-sm uppercase tracking-wider',
-                        getRiskLevelStyle(appointment.riskLevel || 'LOW'),
+                        getRiskLevelStyle(appointment.riskLevel),
                       )}>
-                      {appointment.riskLevel || 'LOW'} Risk
+                      {formatRiskLabel(appointment.riskLevel)}
                     </Badge>
                   </div>
                 </div>
@@ -401,6 +414,8 @@ export default function DoctorAppointmentDetails({ appointment: initialAppointme
                 <DoctorAiWorkflowInsights
                   appointment={appointment}
                   getPriorityStyle={getPriorityStyle}
+                  onRetryTriage={handleRetryTriage}
+                  isRetrying={isPending}
                 />
 
                 {/* Clinical Documentation Workspace */}

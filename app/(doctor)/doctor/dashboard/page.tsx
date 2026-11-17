@@ -49,7 +49,7 @@ const DoctorDashboardPage = async () => {
     intakeFormId: item.intakeForm?.id ?? undefined,
     patientName: item.patient.name,
     status: item.status,
-    riskLevel: item.riskLevel || 'LOW',
+    riskLevel: item.riskLevel ?? null,
     scheduledDate: item.scheduledAt,
   }));
 
@@ -143,7 +143,7 @@ const DoctorDashboardPage = async () => {
                       title: nextAppointment.title,
                       intakeFormId: nextAppointment.intakeForm?.id ?? undefined,
                       status: nextAppointment.status,
-                      riskLevel: nextAppointment.riskLevel || 'LOW',
+                      riskLevel: nextAppointment.riskLevel ?? null,
                     }}
                   />
                 ) : (

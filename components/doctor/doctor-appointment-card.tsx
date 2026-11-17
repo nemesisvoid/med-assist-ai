@@ -1,7 +1,7 @@
 import { isToday, isTomorrow } from 'date-fns';
 import { Button } from '../ui/button';
 import { AppointmentStatus, RiskLevel } from '@/generated/prisma/enums';
-import { formatEnums, cn, getAppointmentStatusStyle, getRiskLevelStyle } from '@/lib/utils';
+import { formatEnums, formatRiskLabel, cn, getAppointmentStatusStyle, getRiskLevelStyle } from '@/lib/utils';
 import Link from 'next/link';
 import { CalendarIcon, ClockIcon, UserIcon, FileWarningIcon, ArrowRightIcon } from 'lucide-react';
 
@@ -16,7 +16,7 @@ type DoctorAppointmentCardProps = {
     title?: string | null;
     intakeFormId: string | undefined;
     status: AppointmentStatus;
-    riskLevel: RiskLevel;
+    riskLevel: RiskLevel | null;
   };
 };
 
@@ -29,7 +29,7 @@ const DoctorAppointmentCard = ({ data }: DoctorAppointmentCardProps) => {
       {/* Visual Indicator Line for Risk Level */}
       <div className={cn(
         'absolute left-0 top-0 bottom-0 w-1.5 transition-colors',
-        data.riskLevel === 'HIGH' ? 'bg-rose-500' : data.riskLevel === 'MEDIUM' ? 'bg-amber-500' : 'bg-emerald-500'
+        data.riskLevel === 'HIGH' ? 'bg-rose-500' : data.riskLevel === 'MEDIUM' ? 'bg-amber-500' : data.riskLevel === 'LOW' ? 'bg-emerald-500' : 'bg-slate-300'
       )} />
 
       <div className='flex items-start gap-4 flex-1 min-w-0 pl-1.5'>
@@ -86,7 +86,7 @@ const DoctorAppointmentCard = ({ data }: DoctorAppointmentCardProps) => {
           </span>
           {/* Risk Badge */}
           <span className={cn('text-[10px] font-bold px-3 py-1 rounded-full border shadow-sm uppercase tracking-wider', getRiskLevelStyle(data.riskLevel))}>
-            {formatEnums(data.riskLevel)} Risk
+            {formatRiskLabel(data.riskLevel)}
           </span>
           {/* Intake Status Alert */}
           {!data.intakeFormId && (

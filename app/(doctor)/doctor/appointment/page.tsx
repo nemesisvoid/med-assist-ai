@@ -19,7 +19,7 @@ const DoctorAppointmentPage = async () => {
     scheduledDate: item.scheduledAt,
     status: item.status,
     title: item.title,
-    riskLevel: item.riskLevel || 'LOW',
+    riskLevel: item.riskLevel ?? null,
   }));
 
   return (

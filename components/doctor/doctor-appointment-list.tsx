@@ -38,7 +38,7 @@ export type DoctorAppointmentItem = {
   title?: string | null;
   intakeFormId: string | undefined;
   status: AppointmentStatus;
-  riskLevel: RiskLevel;
+  riskLevel: RiskLevel | null;
 };
 
 type FilterStatus = 'ALL' | AppointmentStatus;
@@ -46,11 +46,19 @@ type FilterRisk = 'ALL' | RiskLevel;
 
 // ── Risk config ───────────────────────────────────────────────────────────────
 
-const RISK_CONFIG: Record<RiskLevel, { bar: string; dot: string; label: string; priority: number }> = {
+type RiskConfig = { bar: string; dot: string; label: string; priority: number };
+
+const RISK_CONFIG: Record<RiskLevel, RiskConfig> = {
   HIGH:   { bar: 'bg-rose-500',    dot: 'bg-rose-500',    label: 'High',   priority: 0 },
-  MEDIUM: { bar: 'bg-amber-400',   dot: 'bg-amber-400',   label: 'Medium', priority: 1 },
-  LOW:    { bar: 'bg-emerald-400', dot: 'bg-emerald-400', label: 'Low',    priority: 2 },
+  MEDIUM: { bar: 'bg-amber-400',   dot: 'bg-amber-400',   label: 'Medium', priority: 2 },
+  LOW:    { bar: 'bg-emerald-400', dot: 'bg-emerald-400', label: 'Low',    priority: 3 },
 };
+
+// No risk level means AI triage hasn't run (or failed). Sort these right after
+// high-risk visits so an unscored patient is never buried below low-risk ones.
+const UNASSESSED_RISK: RiskConfig = { bar: 'bg-slate-300', dot: 'bg-slate-400', label: 'Not assessed', priority: 1 };
+
+const riskConfigFor = (risk: RiskLevel | null): RiskConfig => (risk ? RISK_CONFIG[risk] : UNASSESSED_RISK);
 
 // ── Status icon map ───────────────────────────────────────────────────────────
 
@@ -69,7 +77,7 @@ function StatusIcon({ status, size = 13 }: { status: AppointmentStatus; size?: n
 // ── Triage Row ────────────────────────────────────────────────────────────────
 
 const TriageRow = ({ item, index }: { item: DoctorAppointmentItem; index: number }) => {
-  const riskCfg = RISK_CONFIG[item.riskLevel] ?? RISK_CONFIG.LOW;
+  const riskCfg = riskConfigFor(item.riskLevel);
   const scheduledAt = new Date(item.scheduledDate);
   const upcoming = isFuture(scheduledAt);
   const isTerminal = item.status === 'COMPLETED' || item.status === 'CANCELLED';
@@ -221,7 +229,7 @@ const TriageRow = ({ item, index }: { item: DoctorAppointmentItem; index: number
 // ── Appointment Card ─────────────────────────────────────────────────────────
 
 const AppointmentCard = ({ item }: { item: DoctorAppointmentItem }) => {
-  const riskCfg = RISK_CONFIG[item.riskLevel] ?? RISK_CONFIG.LOW;
+  const riskCfg = riskConfigFor(item.riskLevel);
   const scheduledAt = new Date(item.scheduledDate);
   const upcoming = isFuture(scheduledAt);
   const isTerminal = item.status === 'COMPLETED' || item.status === 'CANCELLED';
@@ -347,7 +355,7 @@ const AppointmentCard = ({ item }: { item: DoctorAppointmentItem }) => {
               )}
             >
               <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', riskCfg.dot)} aria-hidden='true' />
-              {riskCfg.label} Risk
+              {item.riskLevel ? `${riskCfg.label} Risk` : 'Risk not assessed'}
             </span>
           </div>
         </div>
@@ -438,8 +446,8 @@ const DoctorAppointmentList = ({ data }: DoctorAppointmentListProps) => {
       const aT = a.status === 'COMPLETED' || a.status === 'CANCELLED';
       const bT = b.status === 'COMPLETED' || b.status === 'CANCELLED';
       if (aT !== bT) return aT ? 1 : -1;
-      const rA = RISK_CONFIG[a.riskLevel]?.priority ?? 99;
-      const rB = RISK_CONFIG[b.riskLevel]?.priority ?? 99;
+      const rA = riskConfigFor(a.riskLevel).priority;
+      const rB = riskConfigFor(b.riskLevel).priority;
       if (rA !== rB) return rA - rB;
       return new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime();
     });

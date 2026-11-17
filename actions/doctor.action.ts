@@ -2,7 +2,6 @@
 import * as z from 'zod'
 
 import { prisma } from '@/lib/prisma';
-import { GoogleGenAI } from '@google/genai';
 import { revalidatePath } from 'next/cache';
 import { createNotification } from './notification.action';
 import { getAge } from '@/lib/utils';
@@ -10,8 +9,16 @@ import { startOfDay, subDays, subMonths, startOfYear, format } from 'date-fns';
 import { clinicalNotesSchema } from '@/schema/validators';
 import { AppointmentStatus } from '@/generated/prisma/enums';
 import { recordAudit } from '@/lib/audit';
+import { aiFailure, generateJson, generateText } from '@/lib/ai';
+import { runTriage } from '@/lib/triage';
+import { getLoggedInUser } from '@/lib/get-user';
 
-const ai = new GoogleGenAI({});
+const SoapDraftSchema = z.object({
+  subjective: z.string(),
+  objective: z.string(),
+  assessment: z.string(),
+  plan: z.string(),
+});
 
 
 export const getDoctorById = async (doctorId: string) => {
@@ -307,20 +314,7 @@ Return ONLY a valid JSON object matching this exact format schema without markdo
 }
 `;
 
-    const completion = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-      },
-    });
-
-    const text = completion.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) {
-      throw new Error('Failed to generate SOAP content.');
-    }
-
-    const parsed = JSON.parse(text);
+    const parsed = await generateJson(prompt, SoapDraftSchema);
 
     // Save draft back to appointment
     await prisma.appointment.update({
@@ -347,11 +341,53 @@ Return ONLY a valid JSON object matching this exact format schema without markdo
     revalidatePath(`/doctor/appointment/${appointmentId}`);
     return { success: true, draft: parsed };
   } catch (error) {
+    const failure = aiFailure(error, 'SOAP draft');
+    if (failure) return failure;
     console.error('Error generating SOAP draft:', error);
     return { success: false, message: 'Failed to generate AI SOAP draft.' };
   }
 };
 
+
+/**
+ * Re-run AI triage for an appointment whose intake was never scored (e.g. the
+ * AI quota was exhausted when the patient submitted it). Only the assigned
+ * doctor can trigger it.
+ */
+export const retryTriageAction = async (appointmentId: string) => {
+  const session = await getLoggedInUser();
+  if (!session || session.user.role !== 'DOCTOR') {
+    return { success: false, message: 'You are not allowed to do that.' };
+  }
+
+  const appointment = await prisma.appointment.findUnique({
+    where: { id: appointmentId },
+    select: { doctorId: true, status: true, aiRiskSummary: true, intakeForm: { select: { id: true } } },
+  });
+  if (!appointment || appointment.doctorId !== session.user.id) {
+    return { success: false, message: 'Appointment not found.' };
+  }
+  if (appointment.status === 'COMPLETED' || appointment.status === 'CANCELLED') {
+    return { success: false, message: 'This appointment is closed.' };
+  }
+  if (!appointment.intakeForm) {
+    return { success: false, message: 'The patient has not submitted an intake form yet.' };
+  }
+  if (appointment.aiRiskSummary) {
+    return { success: true, message: 'AI triage is already complete.' };
+  }
+
+  try {
+    const result = await runTriage(appointmentId, { notifyDoctorOnFailure: false });
+    revalidatePath(`/doctor/appointment/${appointmentId}`);
+    if (result.ok) return { success: true, message: 'AI triage complete.' };
+    if (result.reason === 'ai_error') return { success: false, code: result.error.kind, message: result.error.message };
+    return { success: false, message: 'Appointment not found.' };
+  } catch (error) {
+    console.error('Error retrying triage:', error);
+    return { success: false, message: 'Could not run AI triage. Please try again.' };
+  }
+};
 
 export const applySoapDraftAction = async (appointmentId: string, doctorId: string) => {
   try {
@@ -436,7 +472,7 @@ export const generatePatientSummaryNotes = async (appointmentId: string, draftDa
         : (followUp?.recommendedDate ? new Date(followUp.recommendedDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : null);
     const followUpTime = draftData?.followUpTime ?? followUp?.recommendedTime;
     const followUpReason = draftData?.followUpReason ?? followUp?.reason;
-    const followUpNotes = draftData?.followUpNotes ?? followUp?.addtionalNotes;
+    const followUpNotes = draftData?.followUpNotes ?? followUp?.additionalNotes;
 
     const prompt = `You are a compassionate and highly skilled medical communication specialist at a modern telehealth platform called MedAssist AI. Your job is to generate a clear, warm, and easy-to-understand appointment summary letter addressed directly to the patient.
 
@@ -508,23 +544,17 @@ Important rules:
 - If a field is "Not recorded" or "None", handle it gracefully — do not just repeat "Not recorded", instead say something like "Your doctor has not yet recorded this detail" or simply omit it
 - Output only the final letter text — no preamble, no metadata, no explanations`;
 
-    const completion = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
-
-    const text = completion.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) {
-      return { success: false, message: 'Failed to generate patient summary notes.' };
-    }
+    const text = await generateText(prompt);
 
     await prisma.clinicalNote.update({
       where: { appointmentId },
-      data: { patientSummaryNote: text.trim() },
+      data: { patientSummaryNote: text },
     });
 
-    return { success: true, summary: text.trim() };
+    return { success: true, summary: text };
   } catch (error) {
+    const failure = aiFailure(error, 'patient summary');
+    if (failure) return failure;
     console.error('Error generating patient summary notes:', error);
     return { success: false, message: 'Failed to generate patient summary notes.' };
   }

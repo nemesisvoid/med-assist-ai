@@ -1,15 +1,13 @@
 'use server';
 
-import { GoogleGenAI } from '@google/genai';
-
-const ai = new GoogleGenAI({});
-
 import { prisma } from '@/lib/prisma';
 import { AppointmentFormSchema, PatientInTakeFormSchema, PatientProfileFormSchema } from '@/validations/validation';
 import { revalidatePath } from 'next/cache';
 import * as z from 'zod';
 import { generateMedicalRecordNumber } from '@/lib/utils';
 import { createNotification } from './notification.action';
+import { after } from 'next/server';
+import { runTriage } from '@/lib/triage';
 
 export const getPatientProfile = async (userId: string | undefined) => {
   try {
@@ -144,7 +142,9 @@ export const createIntakeForm = async (userId: string, formData: z.infer<typeof 
         additionalNotes: formData.additionalNotes,
       },
     });
-    analyzeAppointment(formData.appointmentId);
+    // Run AI triage after the response is sent. `after` keeps the serverless
+    // function alive until it finishes; failures are handled inside runTriage.
+    after(() => runTriage(formData.appointmentId).catch(error => console.error('[triage] unexpected error:', error)));
     return { success: true, message: 'Intake form created successfully' };
   } catch (error) {
     console.log(error);
@@ -182,149 +182,6 @@ export const getUserNotifications = async (userId: string) => {
     ],
   });
   return res;
-};
-
-export const analyzeAppointment = async (appointmentId: string) => {
-  try {
-    const appointment = await prisma.appointment.findUnique({
-      where: {
-        id: appointmentId,
-      },
-      include: {
-        intakeForm: true,
-        patient: {
-          include: {
-            patientProfile: true,
-          },
-        },
-      },
-    });
-
-    if (!appointment || !appointment.intakeForm) throw new Error('Appointment not found');
-
-    const prompt = `
-You are an expert AI clinical triage assistant operating in an advanced health management framework.
-Your task is to analyze the following patient intake information and assign accurate, safe, and consistent risk, severity, and priority values.
-
---- CLINICAL EVALUATION CRITERIA ---
-1. RISK LEVEL:
-   - HIGH: Life-threatening potential, unstable vital indications, severe acute changes, or high potential for rapid deterioration.
-   - MEDIUM: Sub-acute conditions, distressing symptoms requiring timely intervention, or potential drug/allergy interactions.
-   - LOW: Routine or chronic conditions that are stable, minor acute symptoms, or preventative care visits.
-
-2. SEVERITY LEVEL:
-   - SEVERE: Constant excruciating pain (7-10/10), signs of shock, acute respiratory distress, anaphylaxis, or systemic organ distress.
-   - HIGH: Significant disabling pain or impairment, high fever, progressive infection, or acute psychological crisis.
-   - MODERATE: Mild-to-moderate discomfort, localized stable inflammation, or recurring manageable chronic symptoms.
-   - LOW: Minimal physical distress, minor discomfort, or asymptomatic presentations.
-
-3. PRIORITY LEVEL:
-   - CRITICAL: Immediate clinical review required. High risk of immediate decompensation (e.g., chest pain, sudden numbness, severe breathing issues).
-   - HIGH: Needs attention within a few hours. High pain indices or rapidly worsening infections.
-   - MEDIUM: Standard scheduling. Needs tracking but stable.
-   - LOW: Elective, routine maintenance, or minor self-limiting complaints.
-
---- PATIENT INTAKE DATA ---
-Chief Complaint: ${appointment.intakeForm.chiefComplaint}
-Symptoms: ${appointment.intakeForm.currentSymptoms}
-Pain Level: ${appointment.intakeForm.painLevel ?? 'Not specified'}/10
-Allergies: ${appointment.intakeForm.allergies ?? 'None noted'}
-Medications: ${appointment.intakeForm.medications ?? 'None noted'}
-Medical History: ${appointment.patient.patientProfile?.medicalHistory ?? 'None provided'}
-
---- INSTRUCTIONS ---
-- Cross-reference current symptoms and chief complaints against any listed Allergies, Medications, and Medical History to spot contraindications or hidden complications.
-- Keep the "aiRiskSummary" clinical,objective, concise (2-3 sentences), and free of conversational filler.
-- Keep the "aiRecommendation" actionable for the receiving doctor (e.g., specific diagnostics to review, immediate protocols to verify).
-
-Return ONLY a valid JSON object matching this exact format schema without markdown wrappers:
-{
-  "riskLevel": "LOW" | "MEDIUM" | "HIGH",
-  "severityLevel": "LOW" | "MODERATE" | "HIGH" | "SEVERE",
-  "priority": "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
-  "aiRiskSummary": "string",
-  "aiRecommendation": "string"
-}
-`;
-
-    const completion = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-
-      config: {
-        responseMimeType: 'application/json',
-        // thinkingConfig: {
-        //   thinkingLevel: ThinkingLevel.MEDIUM,
-        // },
-      },
-    });
-
-    const text = completion.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!text) {
-      throw new Error('No AI response');
-    }
-
-    const parsed = JSON.parse(text);
-
-    await prisma.appointment.update({
-      where: {
-        id: appointmentId,
-      },
-      data: {
-        riskLevel: parsed.riskLevel,
-        severityLevel: parsed.severityLevel,
-        priority: parsed.priority,
-        aiRiskSummary: parsed.aiRiskSummary,
-        aiRecommendation: parsed.aiRecommendation,
-        status: 'READY_FOR_REVIEW',
-      },
-    });
-    await createNotification({
-      userId: appointment.patientId,
-      type: 'INTAKE_FORM',
-      title: 'Triage Profile Updated',
-      message: 'Your pre-appointment medical intake has been securely reviewed and updated.',
-    });
-
-    if (appointment.doctorId) {
-      const painValue = appointment.intakeForm.painLevel ? Number(appointment.intakeForm.painLevel) : 0;
-
-      const isUrgentCase =
-        parsed.riskLevel === 'HIGH' ||
-        parsed.severityLevel === 'HIGH' ||
-        parsed.severityLevel === 'SEVERE' ||
-        parsed.priority === 'HIGH' ||
-        parsed.priority === 'CRITICAL' ||
-        painValue >= 7;
-
-      let notificationTitle = 'AI Triage Analysis Complete';
-      let notificationMessage = `Triage report ready for ${appointment.patient.name || 'Patient'}. Priority: ${parsed.priority}.`;
-
-      if (isUrgentCase) {
-        notificationTitle = '🚨 URGENT: High Triage Alert';
-        notificationMessage = `Attention Required: ${appointment.patient.name || 'Patient'} flagged with heightened levels (${parsed.severityLevel} severity / Pain: ${painValue}/10). Summary: ${parsed.aiRiskSummary}`;
-      }
-
-      await createNotification({
-        userId: appointment.doctorId,
-        type: 'APPOINTMENT',
-        title: notificationTitle,
-        message: notificationMessage,
-      });
-    }
-
-    return {
-      success: true,
-      message: 'AI analysis completed successfully',
-    };
-  } catch (error) {
-    console.log(error);
-    return {
-      success: false,
-      message: 'AI analysis failed',
-    };
-  }
 };
 
 export const getPatientAppointmentById = async (appointmentId: string, patientId: string) => {
