@@ -35,7 +35,7 @@ export default function AppointmentsChartWidget({ doctorId }: { doctorId: string
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      const res = await getDashboardAnalytics(doctorId, timeRange);
+      const res = await getDashboardAnalytics(timeRange);
       setData(res);
       setLoading(false);
     };

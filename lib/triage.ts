@@ -12,7 +12,7 @@
 
 import * as z from 'zod';
 import { prisma } from '@/lib/prisma';
-import { createNotification } from '@/actions/notification.action';
+import { createNotification } from '@/lib/notifications';
 import { AIServiceError, generateJson, logAIError, toAIServiceError } from '@/lib/ai';
 
 const TriageSchema = z.object({

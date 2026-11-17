@@ -1,41 +1,43 @@
 'use server';
 
+/**
+ * Patient server actions.
+ *
+ * Every export here is a public endpoint, so the patient is always the signed-in
+ * user (from the session), never an ID passed in by the browser.
+ */
+
 import { prisma } from '@/lib/prisma';
 import { AppointmentFormSchema, PatientInTakeFormSchema, PatientProfileFormSchema } from '@/validations/validation';
 import { revalidatePath } from 'next/cache';
 import * as z from 'zod';
 import { generateMedicalRecordNumber } from '@/lib/utils';
-import { createNotification } from './notification.action';
+import { createNotification } from '@/lib/notifications';
 import { after } from 'next/server';
 import { runTriage } from '@/lib/triage';
+import { authFailure, getSessionWithRole, requireAppointmentPatient, requireRole } from '@/lib/authz';
 
-export const getPatientProfile = async (userId: string | undefined) => {
-  try {
-    if (!userId) throw new Error('User not found');
-    const res = await prisma.patientProfile.findUnique({
-      where: {
-        userId: userId,
-      },
-    });
-    return res;
-  } catch (error) {
-    console.log(error, 'error getting profile');
-  }
+export const getPatientProfile = async () => {
+  const session = await getSessionWithRole('PATIENT');
+  if (!session) return null;
+  return prisma.patientProfile.findUnique({ where: { userId: session.user.id } });
 };
 
-export const createPatientProfile = async (userId: string | undefined, formData: z.infer<typeof PatientProfileFormSchema>) => {
+export const createPatientProfile = async (formData: z.infer<typeof PatientProfileFormSchema>) => {
   try {
-    if (!userId) throw new Error('User not found');
+    const session = await requireRole('PATIENT');
 
     const validatedData = PatientProfileFormSchema.safeParse(formData);
+    if (!validatedData.success) return { success: false, message: 'Please check the form and try again.' };
 
-    if (!validatedData.success) throw new Error(validatedData.error.message);
+    const existing = await prisma.patientProfile.findUnique({ where: { userId: session.user.id }, select: { id: true } });
+    if (existing) return { success: false, message: 'Your profile already exists.' };
 
     const { data } = validatedData;
-    const res = await prisma.patientProfile.create({
+    await prisma.patientProfile.create({
       data: {
         medicalRecordNumber: generateMedicalRecordNumber(),
-        userId: userId,
+        userId: session.user.id,
         dateOfBirth: data.dateOfBirth ?? new Date(),
         gender: data.gender,
         genotype: data.genotype,
@@ -51,226 +53,182 @@ export const createPatientProfile = async (userId: string | undefined, formData:
     revalidatePath('/patient/appointment/create-appointment');
     return { success: true, message: 'Profile created successfully' };
   } catch (error) {
-    console.log(error, 'error creating profile');
+    const failure = authFailure(error);
+    if (failure) return failure;
+    console.error('Error creating patient profile:', error);
     return { success: false, message: 'Failed to create profile' };
   }
 };
 
-export const createAppointment = async (userId: string, formData: z.infer<typeof AppointmentFormSchema>) => {
+export const createAppointment = async (formData: z.infer<typeof AppointmentFormSchema>) => {
   try {
-    const validatedData = AppointmentFormSchema.safeParse(formData);
-    if (!validatedData.success) {
-      throw new Error(validatedData.error.message);
-    }
+    const session = await requireRole('PATIENT');
+    const patientId = session.user.id;
 
+    const validatedData = AppointmentFormSchema.safeParse(formData);
+    if (!validatedData.success) return { success: false, message: 'Please check the form and try again.' };
     const { data } = validatedData;
+
+    // The doctor must be a real, active clinician who has accepted their invite.
+    const doctor = await prisma.user.findFirst({
+      where: { id: data.doctor, role: 'DOCTOR', banned: false, accounts: { some: {} } },
+      select: { id: true },
+    });
+    if (!doctor) return { success: false, message: 'That doctor is not available. Please choose another.' };
+
+    // Enforced here, not only in the UI: one open appointment per patient-doctor pair.
+    const active = await prisma.appointment.findFirst({
+      where: { patientId, doctorId: doctor.id, status: { notIn: ['COMPLETED', 'CANCELLED'] } },
+      select: { id: true },
+    });
+    if (active) return { success: false, message: 'You already have an open appointment with this doctor.' };
+
     const res = await prisma.appointment.create({
       data: {
-        patientId: userId,
+        patientId,
         scheduledAt: data.scheduledAt,
         scheduledTime: data.scheduledTime,
         appointmentReason: data.appointmentReason,
         appointmentType: data.appointmentType,
-        doctorId: data.doctor,
+        doctorId: doctor.id,
       },
     });
 
-    await prisma.notification.create({
-      data: {
-        type: 'APPOINTMENT',
-        userId,
-        title: 'Appointment Scheduled',
-        message: 'Your appointment has been successfully scheduled.',
-      },
+    await createNotification({
+      type: 'APPOINTMENT',
+      userId: patientId,
+      title: 'Appointment Scheduled',
+      message: 'Your appointment has been successfully scheduled.',
+    });
+    await createNotification({
+      type: 'INTAKE_FORM',
+      userId: patientId,
+      title: 'Appointment Scheduled',
+      message: `Please complete your intake form for your ${res.appointmentType} appointment`,
+    });
+    await createNotification({
+      type: 'APPOINTMENT',
+      userId: doctor.id,
+      title: 'New Appointment Assigned',
+      message: 'A new patient appointment has been assigned to you',
     });
 
-    await prisma.notification.create({
-      data: {
-        type: 'INTAKE_FORM',
-        userId,
-        title: 'Appointment Scheduled',
-        message: `Please complete your intake form for your ${res.appointmentType} appointment`,
-      },
-    });
-
-    if (data.doctor) {
-      await prisma.notification.create({
-        data: {
-          title: 'New Appointment Assigned',
-          userId: data.doctor,
-          message: `A new patient appointment has been assigned to you`,
-          type: 'APPOINTMENT',
-        },
-      });
-    }
     return { success: true, message: 'Appointment created successfully' };
   } catch (error) {
-    console.log('Error creating appointment:', error);
+    const failure = authFailure(error);
+    if (failure) return failure;
+    console.error('Error creating appointment:', error);
     return { success: false, message: 'Something went wrong' };
   }
 };
 
-export const checkActiveAppointment = async (patientId: string, doctorId: string) => {
+export const checkActiveAppointment = async (doctorId: string) => {
+  const session = await getSessionWithRole('PATIENT');
+  if (!session) return { hasActive: false };
   try {
     const existing = await prisma.appointment.findFirst({
-      where: {
-        patientId,
-        doctorId,
-        status: {
-          notIn: ['COMPLETED', 'CANCELLED'],
-        },
-      },
+      where: { patientId: session.user.id, doctorId, status: { notIn: ['COMPLETED', 'CANCELLED'] } },
       select: { id: true },
     });
     return { hasActive: !!existing };
   } catch (error) {
-    console.log('Error checking active appointment:', error);
+    console.error('Error checking active appointment:', error);
     return { hasActive: false };
   }
 };
 
-export const createIntakeForm = async (userId: string, formData: z.infer<typeof PatientInTakeFormSchema>) => {
+export const createIntakeForm = async (formData: z.infer<typeof PatientInTakeFormSchema>) => {
   try {
-    const res = await prisma.intakeForm.create({
+    const validatedData = PatientInTakeFormSchema.safeParse(formData);
+    if (!validatedData.success) return { success: false, message: 'Please check the form and try again.' };
+    const data = validatedData.data;
+
+    // Only the patient on this appointment can submit its intake, and only while it's open.
+    await requireAppointmentPatient(data.appointmentId, { requireOpen: true });
+
+    const painLevel = Math.min(10, Math.max(0, Number(data.painLevel) || 0));
+    await prisma.intakeForm.create({
       data: {
-        appointmentId: formData.appointmentId,
-        chiefComplaint: formData.complaint,
-        currentSymptoms: formData.currentSymptoms,
-        painLevel: Number(formData.painLevel),
-        allergies: formData.allergies,
-        medications: formData.medication,
-        additionalNotes: formData.additionalNotes,
+        appointmentId: data.appointmentId,
+        chiefComplaint: data.complaint,
+        currentSymptoms: data.currentSymptoms,
+        painLevel,
+        allergies: data.allergies,
+        medications: data.medication,
+        additionalNotes: data.additionalNotes,
       },
     });
     // Run AI triage after the response is sent. `after` keeps the serverless
     // function alive until it finishes; failures are handled inside runTriage.
-    after(() => runTriage(formData.appointmentId).catch(error => console.error('[triage] unexpected error:', error)));
+    after(() => runTriage(data.appointmentId).catch(error => console.error('[triage] unexpected error:', error)));
     return { success: true, message: 'Intake form created successfully' };
   } catch (error) {
-    console.log(error);
+    const failure = authFailure(error);
+    if (failure) return failure;
+    console.error('Error creating intake form:', error);
     return { success: false, message: 'Something went wrong' };
   }
 };
 
-export const getPatientAppointments = async (userId: string) => {
-  const res = await prisma.appointment.findMany({
-    where: {
-      patientId: userId,
-    },
+export const getPatientAppointments = async () => {
+  const session = await getSessionWithRole('PATIENT');
+  if (!session) return [];
+  return prisma.appointment.findMany({
+    where: { patientId: session.user.id },
     include: {
-      intakeForm: {
-        select: { id: true },
-      },
-      doctor: {
-        select: {
-          name: true,
-        },
-      },
+      intakeForm: { select: { id: true } },
+      doctor: { select: { name: true } },
     },
   });
-  return res;
 };
 
-export const getUserNotifications = async (userId: string) => {
-  const res = await prisma.notification.findMany({
-    where: {
-      userId: userId,
-    },
+/** The signed-in user's notifications (any role). */
+export const getUserNotifications = async () => {
+  const session = await getSessionWithRole();
+  if (!session) return [];
+  return prisma.notification.findMany({
+    where: { userId: session.user.id },
     orderBy: [
       { isRead: 'asc' }, // unread (false) comes before read (true)
       { createdAt: 'desc' }, // newest first within each group
     ],
   });
-  return res;
 };
 
-export const getPatientAppointmentById = async (appointmentId: string, patientId: string) => {
+export const getPatientAppointmentById = async (appointmentId: string) => {
+  const session = await getSessionWithRole('PATIENT');
+  if (!session) return undefined;
   try {
     const res = await prisma.appointment.findUnique({
-      where: {
-        id: appointmentId,
-        patientId,
-      },
+      where: { id: appointmentId, patientId: session.user.id },
       include: {
-        clinicalNote: {
-          include: {
-            prescriptions: true,
-          },
-        },
+        clinicalNote: { include: { prescriptions: true } },
         intakeForm: true,
         followUp: true,
-        doctor: {
-          include: {
-            doctorProfile: true,
-          },
-        },
+        doctor: { include: { doctorProfile: true } },
       },
     });
-
-    if (!res) throw new Error('Appointment not found');
-
-    return res;
+    return res ?? undefined;
   } catch (error) {
-    console.log(error);
-    // throw error;
+    console.error('Error loading appointment:', error);
+    return undefined;
   }
 };
 
+export const patientStats = async () => {
+  const session = await getSessionWithRole('PATIENT');
+  const patientId = session?.user.id ?? '';
 
-export const patientStats = async (patientId: string) => {
-  const upcoming = await prisma.appointment.count({
-    where: {
-      patientId,
-      scheduledAt: {
-        gte: new Date(),
-      },
-    },
-  });
+  const [upcoming, unreadNotifications, completedAppointments, pendingIntakeForms, unreadMessages, totalPrescriptions] = session
+    ? await Promise.all([
+        prisma.appointment.count({ where: { patientId, scheduledAt: { gte: new Date() } } }),
+        prisma.notification.count({ where: { userId: patientId, isRead: false } }),
+        prisma.appointment.count({ where: { patientId, status: 'COMPLETED' } }),
+        prisma.appointment.count({ where: { patientId, status: 'PENDING_INTAKE' } }),
+        prisma.message.count({ where: { receiverId: patientId, isRead: false } }),
+        prisma.prescription.count({ where: { clinicalNote: { appointment: { patientId } } } }),
+      ])
+    : [0, 0, 0, 0, 0, 0];
 
-  const unreadNotifications = await prisma.notification.count({
-    where: {
-      userId: patientId,
-      isRead: false,
-    },
-  });
-
-  const completedAppointments = await prisma.appointment.count({
-    where: {
-      patientId,
-      status: 'COMPLETED',
-    },
-  });
-
-  const pendingIntakeForms = await prisma.appointment.count({
-    where: {
-      patientId,
-      status: 'PENDING_INTAKE',
-    },
-  });
-
-  const unreadMessages = await prisma.message.count({
-    where: {
-      receiverId: patientId,
-      isRead: false,
-    },
-  });
-
-  const totalPrescriptions = await prisma.prescription.count({
-    where: {
-      clinicalNote: {
-        appointment: {
-          patientId,
-        },
-      },
-    },
-  });
-
-  return {
-    upcoming,
-    unreadNotifications,
-    completedAppointments,
-    pendingIntakeForms,
-    unreadMessages,
-    totalPrescriptions,
-  };
+  return { upcoming, unreadNotifications, completedAppointments, pendingIntakeForms, unreadMessages, totalPrescriptions };
 };

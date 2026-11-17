@@ -26,7 +26,7 @@ const Header = async () => {
   let unread = 0;
   if (user) {
     try {
-      const notifications = await getUserNotifications(user.id);
+      const notifications = await getUserNotifications();
       unread = notifications.filter(n => !n.isRead).length;
     } catch (error) {
       console.error('Error fetching notifications:', error);

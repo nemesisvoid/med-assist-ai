@@ -6,7 +6,7 @@ import { redirect } from 'next/navigation';
 const DoctorNotificationPage = async () => {
   const session = await getLoggedInUser();
   if (!session || session.user.role !== 'DOCTOR') return redirect('/auth/login');
-  const notifications = await getUserNotifications(session.user.id);
+  const notifications = await getUserNotifications();
   return (
     <div>
       <h2 className='text-xl font-semibold mb-8'>Notifications</h2>

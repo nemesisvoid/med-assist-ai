@@ -41,7 +41,7 @@ const PatientProfileForm = ({ userId }: { userId: string }) => {
     startTransition(async () => {
       try {
         console.log('Submitted Profile Data:', data);
-        const res = await createPatientProfile(userId, data);
+        const res = await createPatientProfile(data);
         if (!res.success) {
           toast.error(res.message);
           return;

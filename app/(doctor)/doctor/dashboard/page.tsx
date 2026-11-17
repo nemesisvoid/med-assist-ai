@@ -28,10 +28,10 @@ const DoctorDashboardPage = async () => {
   const session = await getLoggedInUser();
   if (!session || session.user.role !== 'DOCTOR') return redirect('/auth/login');
 
-  const isDoctorProfile = await getDoctorProfile(session.user.id);
-  const appointments = await getDoctorsAppointments(session.user.id);
-  const notifications = await getUserNotifications(session.user.id);
-  const recentPatients = await getRecentPatients(session.user.id);
+  const isDoctorProfile = await getDoctorProfile();
+  const appointments = await getDoctorsAppointments();
+  const notifications = await getUserNotifications();
+  const recentPatients = await getRecentPatients();
 
   // Dynamic Metrics Calculations
   const upcomingCount = appointments.filter(item => isFuture(new Date(item.scheduledAt))).length;

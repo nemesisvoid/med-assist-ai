@@ -90,7 +90,7 @@ export default function StartConversationDialog({
     if (!open) return;
     setIsFetching(true);
     setSearchQuery('');
-    getAppointmentsForConversation(userId, userRole)
+    getAppointmentsForConversation()
       .then(res => {
         console.log(res)
         const appts = (res.data ?? []) as Appointment[];
@@ -125,11 +125,7 @@ export default function StartConversationDialog({
 
     startTransition(async () => {
       try {
-        const res = await createOrOpenConversation({
-          patientId: userRole === 'PATIENT' ? userId : appt.partner!.id,
-          doctorId: userRole === 'DOCTOR' ? userId : appt.partner!.id,
-          appointmentId: appt.id,
-        });
+        const res = await createOrOpenConversation({ appointmentId: appt.id });
         if (!res.success || !res.data) {
           toast.error('Could not open conversation. Please try again.');
           return;

@@ -109,7 +109,7 @@ export default function DoctorAppointmentDetails({ appointment: initialAppointme
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleSaveNotes = form.handleSubmit(values => {
     startTransition(async () => {
-      const res = await saveClinicalNoteAction(appointment.id, doctorUser.id, values);
+      const res = await saveClinicalNoteAction(appointment.id, values);
 
       if (res.success) {
         toast.success('Clinical notes saved successfully');
@@ -135,7 +135,7 @@ export default function DoctorAppointmentDetails({ appointment: initialAppointme
           });
         }
       } else {
-        toast.error('Failed to save clinical notes');
+        toast.error(res.message || 'Failed to save clinical notes');
       }
     });
   });
@@ -168,7 +168,7 @@ export default function DoctorAppointmentDetails({ appointment: initialAppointme
 
   const handleApplyAIDraft = () => {
     startTransition(async () => {
-      const res = await applySoapDraftAction(appointment.id, doctorUser.id);
+      const res = await applySoapDraftAction(appointment.id);
       if (res.success) {
         toast.success('AI Draft applied to SOAP notes!');
         await refreshAppointmentState();
@@ -186,12 +186,12 @@ export default function DoctorAppointmentDetails({ appointment: initialAppointme
   const confirmMarkComplete = () => {
     setShowCompleteDialog(false);
     startTransition(async () => {
-      const res = await markAppointmentCompleteAction(appointment.id, doctorUser.id);
+      const res = await markAppointmentCompleteAction(appointment.id);
       if (res.success) {
         toast.success('Appointment completed and workspace locked');
         await refreshAppointmentState();
       } else {
-        toast.error('Failed to finalize appointment');
+        toast.error(res.message || 'Failed to finalize appointment');
       }
     });
   };
@@ -200,27 +200,26 @@ export default function DoctorAppointmentDetails({ appointment: initialAppointme
     if (!patientMessage.trim()) return;
     startTransition(async () => {
       const res = await sendPatientNotificationAction({
-        patientId: appointment.patientId,
-        title: `Message from Dr. ${doctorUser.name}`,
+        appointmentId: appointment.id,
         message: patientMessage,
       });
       if (res.success) {
         toast.success('Notification sent to patient');
         setPatientMessage('');
       } else {
-        toast.error('Failed to dispatch notification');
+        toast.error(res.message || 'Failed to dispatch notification');
       }
     });
   };
 
   const handleRequestIntake = () => {
     startTransition(async () => {
-      const res = await requestUpdatedIntakeAction(appointment.id, appointment.patientId);
+      const res = await requestUpdatedIntakeAction(appointment.id);
       if (res.success) {
         toast.success('Updated intake request sent to patient');
         await refreshAppointmentState();
       } else {
-        toast.error('Failed to request update');
+        toast.error(res.message || 'Failed to request update');
       }
     });
   };

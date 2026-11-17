@@ -183,11 +183,9 @@ const EmptyState = () => (
 const NotificationRow = ({
   item,
   config,
-  pathPrefix,
 }: {
   item: NotificationItem;
   config: (typeof typeConfig)[NotificationType];
-  pathPrefix: string;
 }) => {
   const [open, setOpen] = useState(false);
   const [, startLocalTransition] = useTransition();
@@ -197,7 +195,7 @@ const NotificationRow = ({
     // Fire-and-forget inside its own isolated transition — never touches parent state
     if (next && !item.isRead) {
       startLocalTransition(async () => {
-        await markNotificationAsRead(item.id, pathPrefix);
+        await markNotificationAsRead(item.id);
       });
     }
   };
@@ -323,21 +321,19 @@ const NotificationRow = ({
 const Notifications = ({
   notification,
   unread,
-  userId,
-  pathPrefix = '/doctor',
 }: NotificationsProps) => {
   const [isPending, startTransition] = useTransition();
 
 
   const handleMarkAllRead = () => {
     startTransition(async () => {
-      await markAllNotificationsAsRead(userId, pathPrefix);
+      await markAllNotificationsAsRead();
     });
   };
 
   const handleClearAll = () => {
     startTransition(async () => {
-      await clearAllNotifications(userId, pathPrefix);
+      await clearAllNotifications();
     });
   };
 
@@ -443,7 +439,6 @@ const Notifications = ({
                   <NotificationRow
                     item={item}
                     config={config}
-                    pathPrefix={pathPrefix}
                   />
                 </li>
               </Fragment>

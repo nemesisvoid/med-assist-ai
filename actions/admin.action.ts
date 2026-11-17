@@ -8,7 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { auth, STAFF_INVITE_REDIRECT } from '@/lib/auth';
 import { AuthorizationError, requireAdmin } from '@/lib/authz';
 import { recordAudit } from '@/lib/audit';
-import { createNotification } from './notification.action';
+import { createNotification } from '@/lib/notifications';
 import { OPEN_APPOINTMENT_STATUSES } from '@/lib/data/admin';
 import {
   AvailabilitySchema,

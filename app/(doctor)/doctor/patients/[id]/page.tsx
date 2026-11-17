@@ -29,7 +29,7 @@ export default async function PatientRecordPage({ params }: { params: Promise<{ 
   let patientRecord;
   try {
     console.log("Fetching patient record for:", id);
-    patientRecord = await getPatientFullRecord(id, session.user.id);
+    patientRecord = await getPatientFullRecord(id);
   } catch (error) {
     console.error("Error in PatientRecordPage:", error);
     return (

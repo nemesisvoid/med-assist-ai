@@ -8,7 +8,7 @@ import { redirect } from 'next/navigation';
 const PatientLayout = async ({ children }: { children: React.ReactNode }) => {
   const session = await getLoggedInUser();
   if (!session) return redirect('/auth/login');
-  const getUnreadNotifications = await getUserNotifications(session.user.id);
+  const getUnreadNotifications = await getUserNotifications();
 
   const unread = getUnreadNotifications.filter(item => !item.isRead).length;
   return (

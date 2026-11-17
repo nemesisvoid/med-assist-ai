@@ -8,7 +8,7 @@ const DoctorMessagesPage = async () => {
 
     if (!loggedInUser || loggedInUser.user.role !== 'DOCTOR') return redirect('/');
 
-    const { data: conversations } = await getDoctorMessages(loggedInUser.user.id);
+    const { data: conversations } = await getDoctorMessages();
 
     const data = conversations?.map((c: any) => ({
         id: c.id,

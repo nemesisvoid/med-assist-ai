@@ -12,7 +12,7 @@ const PatientAppointmentDetailsPage = async ({ params }: { params: Promise<{ id:
     return redirect('/auth/login');
   }
 
-  const patientAppointment = await getPatientAppointmentById(id, session.user.id);
+  const patientAppointment = await getPatientAppointmentById(id);
   if (!patientAppointment) return <div>Appointment not found</div>;
 
   return <PatientAppointmentDetails appointment={patientAppointment} />;
