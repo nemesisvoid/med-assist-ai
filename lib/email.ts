@@ -4,7 +4,7 @@
  * The transport is picked from the environment, in this order:
  *
  * 1. `EMAIL_TRANSPORT=console` prints every email (including its action link) to
- *    the server console, in any environment. For local demos only; never set it
+ *    the server console, in any environment. For local testing only; never set it
  *    on a real deployment.
  * 2. Resend (`RESEND_API_KEY` + `EMAIL_FROM`), which needs a verified domain.
  * 3. SMTP via Nodemailer (`SMTP_HOST` + `SMTP_USER` + `SMTP_PASS`), e.g. Gmail
@@ -46,7 +46,7 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
     case 'none':
       if (process.env.NODE_ENV === 'production') {
         throw new Error(
-          'Email provider is not configured. Set RESEND_API_KEY + EMAIL_FROM, or SMTP_HOST + SMTP_USER + SMTP_PASS (or EMAIL_TRANSPORT=console for local demos).',
+          'Email provider is not configured. Set RESEND_API_KEY + EMAIL_FROM, or SMTP_HOST + SMTP_USER + SMTP_PASS (or EMAIL_TRANSPORT=console for local testing).',
         );
       }
       return logToConsole(payload);
