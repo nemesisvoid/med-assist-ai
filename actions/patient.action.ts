@@ -144,24 +144,45 @@ export const createIntakeForm = async (formData: z.infer<typeof PatientInTakeFor
     const data = validatedData.data;
 
     // Only the patient on this appointment can submit its intake, and only while it's open.
-    await requireAppointmentPatient(data.appointmentId, { requireOpen: true });
+    const { appointment } = await requireAppointmentPatient(data.appointmentId, { requireOpen: true });
+
+    const existing = await prisma.intakeForm.findUnique({ where: { appointmentId: data.appointmentId }, select: { id: true } });
+    // A submitted intake can only be replaced when the doctor asked for an update
+    // (requestUpdatedIntakeAction puts the appointment back to PENDING_INTAKE).
+    const isUpdate = !!existing;
+    if (isUpdate && appointment.status !== 'PENDING_INTAKE') {
+      return { success: false, message: 'Your intake form has already been submitted.' };
+    }
 
     const painLevel = Math.min(10, Math.max(0, Number(data.painLevel) || 0));
-    await prisma.intakeForm.create({
-      data: {
-        appointmentId: data.appointmentId,
-        chiefComplaint: data.complaint,
-        currentSymptoms: data.currentSymptoms,
-        painLevel,
-        allergies: data.allergies,
-        medications: data.medication,
-        additionalNotes: data.additionalNotes,
-      },
-    });
+    const fields = {
+      chiefComplaint: data.complaint,
+      currentSymptoms: data.currentSymptoms,
+      painLevel,
+      allergies: data.allergies,
+      medications: data.medication,
+      additionalNotes: data.additionalNotes,
+    };
+
+    await prisma.$transaction([
+      prisma.intakeForm.upsert({
+        where: { appointmentId: data.appointmentId },
+        create: { appointmentId: data.appointmentId, ...fields },
+        update: fields,
+      }),
+      // The previous AI triage described the old answers; clear it so it is re-run, never shown stale.
+      prisma.appointment.update({
+        where: { id: data.appointmentId },
+        data: { riskLevel: null, severityLevel: null, aiRiskSummary: null, aiRecommendation: null, priority: 'MEDIUM' },
+      }),
+    ]);
+
     // Run AI triage after the response is sent. `after` keeps the serverless
     // function alive until it finishes; failures are handled inside runTriage.
     after(() => runTriage(data.appointmentId).catch(error => console.error('[triage] unexpected error:', error)));
-    return { success: true, message: 'Intake form created successfully' };
+    revalidatePath('/patient/appointment');
+    revalidatePath('/patient/dashboard');
+    return { success: true, message: isUpdate ? 'Intake form updated' : 'Intake form submitted' };
   } catch (error) {
     const failure = authFailure(error);
     if (failure) return failure;

@@ -103,6 +103,8 @@ const PatientAppointmentCard = ({
   status,
 }: PatientAppointmentCardProps) => {
   const hasIntake = !!intakeFormId;
+  // The doctor asked for an update: the appointment is back to PENDING_INTAKE although an intake exists.
+  const updateRequested = hasIntake && (status ?? '').toUpperCase() === 'PENDING_INTAKE';
   const upcoming = isFuture(scheduledAt);
   const past = isPast(scheduledAt);
   const isCompleted = (status ?? '').toUpperCase() === 'COMPLETED';
@@ -265,8 +267,11 @@ const PatientAppointmentCard = ({
           {/* Left: Intake CTA */}
           <div>
             {upcoming && !isCancelled ? (
-              !hasIntake ? (
-                <PatientIntakeForm appointmentId={appointmentId} />
+              !hasIntake || updateRequested ? (
+                <PatientIntakeForm
+                  appointmentId={appointmentId}
+                  isUpdate={updateRequested}
+                />
               ) : (
                 <div className='flex items-center gap-1.5 text-xs text-emerald-600 font-semibold'>
                   <FileCheck2 size={13} aria-hidden='true' />
