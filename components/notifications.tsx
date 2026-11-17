@@ -227,7 +227,8 @@ const NotificationRow = ({
               <span className={cn('text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md', config.badgeBg, config.badgeText)}>
                 {config.label}
               </span>
-              <span className="text-[11px] text-text-soft">
+              {/* Relative time depends on the clock, so server and browser can differ by a minute. */}
+              <span className="text-[11px] text-text-soft" suppressHydrationWarning>
                 {formatDistanceToNow(item.createdAt, { addSuffix: true })}
               </span>
             </div>
@@ -371,15 +372,19 @@ const Notifications = ({
 
             {/* Clear all — guarded by confirmation dialog */}
             <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={isPending}
-                  className="text-xs h-8 px-3 text-slate-500 hover:bg-red-50 hover:text-red-600 font-semibold rounded-lg cursor-pointer"
-                >
-                  Clear all
-                </Button>
+              {/* Base UI uses `render` (not `asChild`); nesting <Button> inside the trigger produced
+                  a <button> inside a <button>, which broke hydration. */}
+              <AlertDialogTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={isPending}
+                    className="text-xs h-8 px-3 text-slate-500 hover:bg-red-50 hover:text-red-600 font-semibold rounded-lg cursor-pointer"
+                  />
+                }
+              >
+                Clear all
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
