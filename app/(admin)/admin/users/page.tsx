@@ -7,6 +7,7 @@ import { ClearFilters, FilterBar, SearchFilter, SelectFilter } from '@/component
 import Pagination from '@/components/admin/pagination';
 import { UserRowActions } from '@/components/admin/user-actions';
 import { InviteDoctorButton } from '@/components/admin/doctor-actions';
+import { InviteAdminButton } from '@/components/admin/invite-admin-button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { getUserRoleCounts, listUsers, type UserStatusFilter } from '@/lib/data/admin';
 import { requireAdminPage } from '@/lib/authz';
@@ -39,7 +40,12 @@ const UsersPage = async ({ searchParams }: { searchParams: SearchParams }) => {
       <PageHeader
         title='Users'
         description='Every account on the platform. Change roles, suspend compromised accounts and sign users out of all devices.'
-        actions={<InviteDoctorButton />}
+        actions={
+          <div className='flex flex-wrap gap-2'>
+            <InviteAdminButton />
+            <InviteDoctorButton />
+          </div>
+        }
       />
 
       <dl className='grid grid-cols-2 gap-3 sm:grid-cols-4'>

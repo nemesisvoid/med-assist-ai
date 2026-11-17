@@ -14,9 +14,11 @@ import {
   AvailabilitySchema,
   CancelAppointmentSchema,
   ChangeRoleSchema,
+  InviteAdminSchema,
   InviteDoctorSchema,
   ReassignAppointmentSchema,
   SuspendUserSchema,
+  type InviteAdminInput,
   type InviteDoctorInput,
 } from '@/validations/admin';
 
@@ -41,8 +43,11 @@ const revalidateAdmin = (...paths: string[]) => {
   for (const path of ['/admin/dashboard', '/admin/audit-logs', ...paths]) revalidatePath(path);
 };
 
+/** Admins who can actually sign in: not suspended and invite accepted (an account with a password exists). */
 async function countActiveAdmins(excludeUserId?: string) {
-  return prisma.user.count({ where: { role: 'ADMIN', banned: false, ...(excludeUserId ? { id: { not: excludeUserId } } : {}) } });
+  return prisma.user.count({
+    where: { role: 'ADMIN', banned: false, accounts: { some: {} }, ...(excludeUserId ? { id: { not: excludeUserId } } : {}) },
+  });
 }
 
 // ─── Users ─────────────────────────────────────────────────────────────────────
@@ -192,16 +197,58 @@ export async function inviteDoctor(input: InviteDoctorInput) {
   });
 }
 
-export async function resendDoctorInvite(userId: string) {
+// ─── Administrators ────────────────────────────────────────────────────────────
+
+export async function inviteAdmin(input: InviteAdminInput) {
   return adminAction(async adminId => {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, role: true, _count: { select: { accounts: true } } } });
-    if (!user || user.role !== 'DOCTOR') return fail('Doctor not found.');
-    if (user._count.accounts > 0) return fail('This doctor has already activated their account.');
+    const data = InviteAdminSchema.parse(input);
+
+    const existing = await prisma.user.findUnique({ where: { email: data.email }, select: { id: true } });
+    if (existing) return fail('An account with this email already exists. Change its role from its user page instead.');
+
+    // Same flow as doctors: no password is created here. The invitee sets one
+    // through a single-use emailed link, so no admin ever handles another's credentials.
+    const user = await prisma.user.create({
+      data: { id: randomUUID(), name: data.name, email: data.email, role: 'ADMIN', emailVerified: true },
+      select: { id: true },
+    });
+
+    await sendStaffInvite(data.email);
+
+    await recordAudit({
+      actorId: adminId,
+      action: 'ADMIN_INVITED',
+      entityType: 'User',
+      entityId: user.id,
+      summary: 'Invited administrator',
+    });
+
+    revalidateAdmin('/admin/users');
+    return { ok: true, message: `Invitation sent to ${data.email}.` };
+  });
+}
+
+/** Resends the set-password email to an invited doctor or administrator who hasn't activated yet. */
+export async function resendStaffInvite(userId: string) {
+  return adminAction(async adminId => {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, role: true, banned: true, _count: { select: { accounts: true } } },
+    });
+    if (!user || (user.role !== 'DOCTOR' && user.role !== 'ADMIN')) return fail('Invitation not found.');
+    if (user.banned) return fail('This account is suspended. Reactivate it first.');
+    if (user._count.accounts > 0) return fail('This account has already been activated.');
 
     await sendStaffInvite(user.email);
-    await recordAudit({ actorId: adminId, action: 'DOCTOR_INVITE_RESENT', entityType: 'User', entityId: userId, summary: 'Resent doctor invitation' });
+    await recordAudit({
+      actorId: adminId,
+      action: user.role === 'ADMIN' ? 'ADMIN_INVITE_RESENT' : 'DOCTOR_INVITE_RESENT',
+      entityType: 'User',
+      entityId: userId,
+      summary: `Resent ${user.role === 'ADMIN' ? 'administrator' : 'doctor'} invitation`,
+    });
 
-    revalidateAdmin('/admin/doctors');
+    revalidateAdmin('/admin/doctors', '/admin/users', `/admin/users/${userId}`);
     return { ok: true, message: 'Invitation resent.' };
   });
 }
