@@ -11,6 +11,7 @@ import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { createIntakeForm } from '@/actions/patient.action';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 
 type PatientIntakeFormProps = {
   appointmentId: string;
@@ -22,6 +23,7 @@ type PatientIntakeFormProps = {
 const PatientIntakeForm = ({ appointmentId, isUpdate = false, onSuccess }: PatientIntakeFormProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   const {
     handleSubmit,
@@ -52,6 +54,8 @@ const PatientIntakeForm = ({ appointmentId, isUpdate = false, onSuccess }: Patie
         toast.success(res.message);
         setIsOpen(false);
         reset();
+        // Re-render the appointment cards so the button switches to "Intake submitted".
+        router.refresh();
         if (onSuccess) onSuccess();
       } catch (error) {
         console.error('Failed to submit intake form:', error);

@@ -170,10 +170,19 @@ export const createIntakeForm = async (formData: z.infer<typeof PatientInTakeFor
         create: { appointmentId: data.appointmentId, ...fields },
         update: fields,
       }),
-      // The previous AI triage described the old answers; clear it so it is re-run, never shown stale.
+      // The intake is received, so the visit is ready for review now (not when the background
+      // triage finishes). The previous AI triage described the old answers; clear it so it is
+      // re-run, never shown stale.
       prisma.appointment.update({
         where: { id: data.appointmentId },
-        data: { riskLevel: null, severityLevel: null, aiRiskSummary: null, aiRecommendation: null, priority: 'MEDIUM' },
+        data: {
+          ...(appointment.status === 'PENDING_INTAKE' ? { status: 'READY_FOR_REVIEW' as const } : {}),
+          riskLevel: null,
+          severityLevel: null,
+          aiRiskSummary: null,
+          aiRecommendation: null,
+          priority: 'MEDIUM',
+        },
       }),
     ]);
 
