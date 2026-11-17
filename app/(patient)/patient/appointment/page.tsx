@@ -8,8 +8,8 @@ const PatientAppointmentPage = async () => {
   const session = await getLoggedInUser();
   if (!session) return redirect('/auth/login');
 
-  const patientProfile = await getPatientProfile(session.user.id);
-  const appointments = await getPatientAppointments(session.user.id);
+  const patientProfile = await getPatientProfile();
+  const appointments = await getPatientAppointments();
 
   const data = appointments.map(item => ({
     appointmentId: item.id,

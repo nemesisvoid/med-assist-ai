@@ -42,7 +42,7 @@ const PatientIntakeForm = ({ appointmentId, onSuccess }: PatientIntakeFormProps)
   const onSubmit = (data: z.infer<typeof PatientInTakeFormSchema>) => {
     startTransition(async () => {
       try {
-        const res = await createIntakeForm(appointmentId, data);
+        const res = await createIntakeForm(data);
         if (!res?.success) {
           toast.error(res?.message);
           return;

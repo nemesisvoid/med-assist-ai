@@ -8,7 +8,7 @@ const PatientMessagePage = async () => {
 
     if (!loggedInUser || loggedInUser.user.role !== 'PATIENT') return redirect('/');
 
-    const { data: conversations } = await getPatientMessages(loggedInUser.user.id);
+    const { data: conversations } = await getPatientMessages();
 
     const data = conversations?.map((c: any) => ({
         id: c.id,

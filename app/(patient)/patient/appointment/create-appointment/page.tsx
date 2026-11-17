@@ -7,7 +7,7 @@ import { redirect } from 'next/navigation';
 const CreateAppointmentPage = async () => {
   const session = await getLoggedInUser();
   if (!session) return redirect('/auth/login');
-  const patientProfile = await getPatientProfile(session?.user?.id);
+  const patientProfile = await getPatientProfile();
   return <div>{!patientProfile ? <PatientOnboarding userId={session.user.id} /> : <PatientAppointmentForm userId={session.user.id} />}</div>;
 };
 

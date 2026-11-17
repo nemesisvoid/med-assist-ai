@@ -7,7 +7,7 @@ const DoctorAppointmentPage = async () => {
   const session = await getLoggedInUser();
   if (!session || !session.user.role || session.user.role === 'PATIENT') return redirect('/auth/login');
 
-  const res = await getDoctorsAppointments(session.user.id);
+  const res = await getDoctorsAppointments();
 
   const data = res.map(item => ({
     appointmentId: item.id,
@@ -19,7 +19,7 @@ const DoctorAppointmentPage = async () => {
     scheduledDate: item.scheduledAt,
     status: item.status,
     title: item.title,
-    riskLevel: item.riskLevel || 'LOW',
+    riskLevel: item.riskLevel ?? null,
   }));
 
   return (

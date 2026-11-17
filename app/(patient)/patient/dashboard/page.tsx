@@ -26,10 +26,10 @@ const PatientDashboardPage = async () => {
   const session = await getLoggedInUser();
   if (!session || session.user.role !== 'PATIENT') return redirect('/auth/login');
 
-  const isPatientProfile = await getPatientProfile(session.user.id);
-  const appointments = await getPatientAppointments(session.user.id);
-  const stats = await patientStats(session.user.id);
-  const notifications = await getUserNotifications(session.user.id);
+  const isPatientProfile = await getPatientProfile();
+  const appointments = await getPatientAppointments();
+  const stats = await patientStats();
+  const notifications = await getUserNotifications();
 
   const recentNotifications = notifications.slice(0, 4);
 

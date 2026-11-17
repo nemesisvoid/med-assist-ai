@@ -2,31 +2,47 @@
 import * as z from 'zod'
 
 import { prisma } from '@/lib/prisma';
-import { GoogleGenAI } from '@google/genai';
 import { revalidatePath } from 'next/cache';
-import { createNotification } from './notification.action';
-import { getAge } from '@/lib/utils';
+import { createNotification } from '@/lib/notifications';
+import { formatDoctorName, getAge } from '@/lib/utils';
 import { startOfDay, subDays, subMonths, startOfYear, format } from 'date-fns';
 import { clinicalNotesSchema } from '@/schema/validators';
 import { AppointmentStatus } from '@/generated/prisma/enums';
 import { recordAudit } from '@/lib/audit';
+import { aiFailure, generateJson, generateText } from '@/lib/ai';
+import { runTriage } from '@/lib/triage';
+import { authFailure, getSessionWithRole, requireAssignedDoctor, requireRole } from '@/lib/authz';
 
-const ai = new GoogleGenAI({});
+/*
+ * Doctor server actions.
+ *
+ * Every export here is a public endpoint. The doctor is always the signed-in
+ * user (from the session), and actions on an appointment require the caller to
+ * be the doctor assigned to it. Completed or cancelled appointments are locked.
+ */
+
+const SoapDraftSchema = z.object({
+  subjective: z.string(),
+  objective: z.string(),
+  assessment: z.string(),
+  plan: z.string(),
+});
 
 
+/** Public profile of a doctor, for the booking flow. */
 export const getDoctorById = async (doctorId: string) => {
   try {
-    const res = await prisma.doctorProfile.findUnique({
-      where: {
-        userId: doctorId,
-      },
-      include: {
-        user: {
-          select: {
-            name: true,
-            email: true,
-          },
-        },
+    const session = await getSessionWithRole();
+    if (!session) return null;
+    const res = await prisma.doctorProfile.findFirst({
+      where: { userId: doctorId, user: { role: 'DOCTOR' } },
+      select: {
+        specialty: true,
+        yearsOfExperience: true,
+        bio: true,
+        imageUrl: true,
+        availabilityStatus: true,
+        user: { select: { name: true } },
       },
     });
     return res;
@@ -35,21 +51,16 @@ export const getDoctorById = async (doctorId: string) => {
   }
 };
 
-export const getAllDoctors = async () => {
-  const res = await prisma.user.findMany({
-    where: {
-      role: 'DOCTOR',
-    },
-  });
-
-  return res;
-};
-
+/** Bookable doctors matching a search (signed-in users only; public profile fields only). */
 export const searchDoctors = async (query: string) => {
   try {
+    const session = await getSessionWithRole();
+    if (!session) return [];
     const res = await prisma.user.findMany({
       where: {
         role: 'DOCTOR',
+        banned: false,
+        accounts: { some: {} },
         OR: [
           {
             name: {
@@ -73,7 +84,10 @@ export const searchDoctors = async (query: string) => {
           },
         ],
       },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        image: true,
         doctorProfile: {
           select: {
             availabilityStatus: true,
@@ -93,10 +107,12 @@ export const searchDoctors = async (query: string) => {
   }
 };
 
-export const getDoctorsAppointments = async (doctorId: string) => {
+export const getDoctorsAppointments = async () => {
+  const session = await getSessionWithRole('DOCTOR');
+  if (!session) return [];
   const res = await prisma.appointment.findMany({
     where: {
-      doctorId: doctorId,
+      doctorId: session.user.id,
     },
     include: {
       intakeForm: {
@@ -116,9 +132,12 @@ export const getDoctorsAppointments = async (doctorId: string) => {
 };
 
 export const getDoctorAppointmentById = async (appointmentId: string) => {
+  const session = await getSessionWithRole('DOCTOR');
+  if (!session) return null;
   const res = await prisma.appointment.findUnique({
     where: {
       id: appointmentId,
+      doctorId: session.user.id,
     },
     include: {
       intakeForm: true,
@@ -143,8 +162,15 @@ export const getDoctorAppointmentById = async (appointmentId: string) => {
   return res;
 };
 
-export const saveClinicalNoteAction = async (appointmentId: string, doctorId: string, data: z.infer<typeof clinicalNotesSchema>) => {
+export const saveClinicalNoteAction = async (appointmentId: string, input: z.infer<typeof clinicalNotesSchema>) => {
   try {
+    const { session } = await requireAssignedDoctor(appointmentId, { requireOpen: true });
+    const doctorId = session.user.id;
+
+    const parsed = clinicalNotesSchema.safeParse(input);
+    if (!parsed.success) return { success: false, message: 'Please check the clinical notes form and try again.' };
+    const data = parsed.data;
+
     const updatedNote = await prisma.clinicalNote.upsert({
       where: {
         appointmentId,
@@ -246,6 +272,8 @@ export const saveClinicalNoteAction = async (appointmentId: string, doctorId: st
     revalidatePath(`/doctor/appointment/${appointmentId}`);
     return { success: true, note: updatedNote };
   } catch (error) {
+    const failure = authFailure(error);
+    if (failure) return failure;
     console.error('Error saving clinical notes:', error);
     return { success: false, message: 'Failed to save clinical notes' };
   }
@@ -253,6 +281,7 @@ export const saveClinicalNoteAction = async (appointmentId: string, doctorId: st
 
 export const generateSoapDraftAction = async (appointmentId: string) => {
   try {
+    await requireAssignedDoctor(appointmentId, { requireOpen: true });
     const appointment = await prisma.appointment.findUnique({
       where: { id: appointmentId },
       include: {
@@ -307,20 +336,7 @@ Return ONLY a valid JSON object matching this exact format schema without markdo
 }
 `;
 
-    const completion = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-      },
-    });
-
-    const text = completion.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) {
-      throw new Error('Failed to generate SOAP content.');
-    }
-
-    const parsed = JSON.parse(text);
+    const parsed = await generateJson(prompt, SoapDraftSchema);
 
     // Save draft back to appointment
     await prisma.appointment.update({
@@ -347,14 +363,56 @@ Return ONLY a valid JSON object matching this exact format schema without markdo
     revalidatePath(`/doctor/appointment/${appointmentId}`);
     return { success: true, draft: parsed };
   } catch (error) {
+    const failure = authFailure(error) ?? aiFailure(error, 'SOAP draft');
+    if (failure) return failure;
     console.error('Error generating SOAP draft:', error);
     return { success: false, message: 'Failed to generate AI SOAP draft.' };
   }
 };
 
 
-export const applySoapDraftAction = async (appointmentId: string, doctorId: string) => {
+/**
+ * Re-run AI triage for an appointment whose intake was never scored (e.g. the
+ * AI quota was exhausted when the patient submitted it). Only the assigned
+ * doctor can trigger it.
+ */
+export const retryTriageAction = async (appointmentId: string) => {
   try {
+    await requireAssignedDoctor(appointmentId, { requireOpen: true });
+  } catch (error) {
+    const failure = authFailure(error);
+    if (failure) return failure;
+    throw error;
+  }
+
+  const appointment = await prisma.appointment.findUnique({
+    where: { id: appointmentId },
+    select: { aiRiskSummary: true, intakeForm: { select: { id: true } } },
+  });
+  if (!appointment) return { success: false, message: 'Appointment not found.' };
+  if (!appointment.intakeForm) {
+    return { success: false, message: 'The patient has not submitted an intake form yet.' };
+  }
+  if (appointment.aiRiskSummary) {
+    return { success: true, message: 'AI triage is already complete.' };
+  }
+
+  try {
+    const result = await runTriage(appointmentId, { notifyDoctorOnFailure: false });
+    revalidatePath(`/doctor/appointment/${appointmentId}`);
+    if (result.ok) return { success: true, message: 'AI triage complete.' };
+    if (result.reason === 'ai_error') return { success: false, code: result.error.kind, message: result.error.message };
+    return { success: false, message: 'Appointment not found.' };
+  } catch (error) {
+    console.error('Error retrying triage:', error);
+    return { success: false, message: 'Could not run AI triage. Please try again.' };
+  }
+};
+
+export const applySoapDraftAction = async (appointmentId: string) => {
+  try {
+    const { session } = await requireAssignedDoctor(appointmentId, { requireOpen: true });
+    const doctorId = session.user.id;
     const appointment = await prisma.appointment.findUnique({
       where: { id: appointmentId },
     });
@@ -387,6 +445,8 @@ export const applySoapDraftAction = async (appointmentId: string, doctorId: stri
     revalidatePath(`/doctor/appointment/${appointmentId}`);
     return { success: true, note: updatedNote };
   } catch (error) {
+    const failure = authFailure(error);
+    if (failure) return failure;
     console.error('Error applying AI SOAP draft:', error);
     return { success: false, message: 'Failed to apply AI SOAP draft.' };
   }
@@ -394,6 +454,7 @@ export const applySoapDraftAction = async (appointmentId: string, doctorId: stri
 
 export const generatePatientSummaryNotes = async (appointmentId: string, draftData?: any) => {
   try {
+    await requireAssignedDoctor(appointmentId, { requireOpen: true });
     const appointment = await prisma.appointment.findUnique({
       where: { id: appointmentId },
       include: {
@@ -436,7 +497,7 @@ export const generatePatientSummaryNotes = async (appointmentId: string, draftDa
         : (followUp?.recommendedDate ? new Date(followUp.recommendedDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : null);
     const followUpTime = draftData?.followUpTime ?? followUp?.recommendedTime;
     const followUpReason = draftData?.followUpReason ?? followUp?.reason;
-    const followUpNotes = draftData?.followUpNotes ?? followUp?.addtionalNotes;
+    const followUpNotes = draftData?.followUpNotes ?? followUp?.additionalNotes;
 
     const prompt = `You are a compassionate and highly skilled medical communication specialist at a modern telehealth platform called MedAssist AI. Your job is to generate a clear, warm, and easy-to-understand appointment summary letter addressed directly to the patient.
 
@@ -508,30 +569,26 @@ Important rules:
 - If a field is "Not recorded" or "None", handle it gracefully — do not just repeat "Not recorded", instead say something like "Your doctor has not yet recorded this detail" or simply omit it
 - Output only the final letter text — no preamble, no metadata, no explanations`;
 
-    const completion = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
-
-    const text = completion.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) {
-      return { success: false, message: 'Failed to generate patient summary notes.' };
-    }
+    const text = await generateText(prompt);
 
     await prisma.clinicalNote.update({
       where: { appointmentId },
-      data: { patientSummaryNote: text.trim() },
+      data: { patientSummaryNote: text },
     });
 
-    return { success: true, summary: text.trim() };
+    return { success: true, summary: text };
   } catch (error) {
+    const failure = authFailure(error) ?? aiFailure(error, 'patient summary');
+    if (failure) return failure;
     console.error('Error generating patient summary notes:', error);
     return { success: false, message: 'Failed to generate patient summary notes.' };
   }
 };
 
-export const markAppointmentCompleteAction = async (appointmentId: string, doctorId: string) => {
+export const markAppointmentCompleteAction = async (appointmentId: string) => {
   try {
+    const { session } = await requireAssignedDoctor(appointmentId, { requireOpen: true });
+    const doctorId = session.user.id;
     const appointment = await prisma.appointment.update({
       where: { id: appointmentId },
       data: { status: 'COMPLETED' },
@@ -592,38 +649,44 @@ export const markAppointmentCompleteAction = async (appointmentId: string, docto
     revalidatePath(`/doctor/appointment/${appointmentId}`);
     return { success: true };
   } catch (error) {
+    const failure = authFailure(error);
+    if (failure) return failure;
     console.error('Error completing appointment:', error);
     return { success: false, message: 'Failed to complete appointment.' };
   }
 };
 
-export const sendPatientNotificationAction = async ({
-  patientId,
-  title,
-  message,
-}: {
-  patientId: string;
-  title: string;
-  message: string;
-}) => {
+/** Quick notice from the assigned doctor to the patient on an appointment. */
+export const sendPatientNotificationAction = async ({ appointmentId, message }: { appointmentId: string; message: string }) => {
   try {
+    const { session, appointment } = await requireAssignedDoctor(appointmentId);
+    const text = message?.trim() ?? '';
+    if (text.length === 0 || text.length > 1000) {
+      return { success: false, message: 'Messages must be between 1 and 1000 characters.' };
+    }
     const notif = await prisma.notification.create({
       data: {
-        userId: patientId,
+        userId: appointment.patientId,
         type: 'MESSAGE',
-        title: title,
-        message: message,
+        // The sender name comes from the session, so a notice can't impersonate someone else.
+        title: `Message from ${formatDoctorName(session.user.name)}`,
+        message: text,
+        link: `/patient/appointment/${appointment.id}`,
       },
     });
     return { success: true, notification: notif };
   } catch (error) {
+    const failure = authFailure(error);
+    if (failure) return failure;
     console.error('Error sending notification to patient:', error);
     return { success: false, message: 'Failed to send notification.' };
   }
 };
 
-export const requestUpdatedIntakeAction = async (appointmentId: string, patientId: string) => {
+export const requestUpdatedIntakeAction = async (appointmentId: string) => {
   try {
+    const { appointment } = await requireAssignedDoctor(appointmentId, { requireOpen: true });
+    const patientId = appointment.patientId;
     await prisma.appointment.update({
       where: { id: appointmentId },
       data: {
@@ -643,18 +706,21 @@ export const requestUpdatedIntakeAction = async (appointmentId: string, patientI
     revalidatePath(`/doctor/appointment/${appointmentId}`);
     return { success: true };
   } catch (error) {
+    const failure = authFailure(error);
+    if (failure) return failure;
     console.error('Error requesting updated intake:', error);
     return { success: false, message: 'Failed to request updated intake.' };
   }
 };
 
 
-export const getDoctorProfile = async (userId: string | undefined) => {
+export const getDoctorProfile = async () => {
   try {
-    if (!userId) throw new Error('User not found');
+    const session = await getSessionWithRole('DOCTOR');
+    if (!session) return null;
     const res = await prisma.doctorProfile.findUnique({
       where: {
-        userId: userId,
+        userId: session.user.id,
       },
     });
     return res;
@@ -663,10 +729,12 @@ export const getDoctorProfile = async (userId: string | undefined) => {
   }
 };
 
-export const getRecentPatients = async (doctorId: string) => {
+export const getRecentPatients = async () => {
   try {
+    const session = await getSessionWithRole('DOCTOR');
+    if (!session) return [];
     const recentAppointments = await prisma.appointment.findMany({
-      where: { doctorId },
+      where: { doctorId: session.user.id },
       orderBy: { updatedAt: 'desc' },
       take: 20, // Fetch recent enough to get distinct
       include: {
@@ -715,8 +783,11 @@ export const getRecentPatients = async (doctorId: string) => {
   }
 };
 
-export const getPatientFullRecord = async (patientId: string, doctorId: string) => {
+export const getPatientFullRecord = async (patientId: string) => {
   try {
+    const session = await requireRole('DOCTOR');
+    const doctorId = session.user.id;
+
     // GUARD CLAUSE: Ensure the doctor is authorized to view this patient
     // A doctor is authorized if they have at least one appointment with the patient.
     const hasAppointment = await prisma.appointment.findFirst({
@@ -776,8 +847,12 @@ export const getPatientFullRecord = async (patientId: string, doctorId: string) 
   }
 };
 
-export const getDashboardAnalytics = async (doctorId: string, timeRange: '7d' | '30d' | '6m' | '1y') => {
+export const getDashboardAnalytics = async (timeRange: '7d' | '30d' | '6m' | '1y') => {
   try {
+    const session = await getSessionWithRole('DOCTOR');
+    if (!session || !['7d', '30d', '6m', '1y'].includes(timeRange)) return [];
+    const doctorId = session.user.id;
+
     let startDate = new Date();
     
     if (timeRange === '7d') startDate = subDays(new Date(), 6);

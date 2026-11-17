@@ -54,7 +54,13 @@ export function getAppointmentStatusStyle(status: AppointmentStatus): string {
   }
 }
 
-export function getRiskLevelStyle(risk: RiskLevel): string {
+/** Badge text for a risk level. A missing level means AI triage hasn't run, never "low". */
+export function formatRiskLabel(risk: RiskLevel | null | undefined): string {
+  if (!risk) return 'Risk not assessed';
+  return `${risk.charAt(0)}${risk.slice(1).toLowerCase()} Risk`;
+}
+
+export function getRiskLevelStyle(risk: RiskLevel | null | undefined): string {
   switch (risk) {
     case RiskLevel.LOW:
       return 'bg-emerald-50 text-emerald-700 border-emerald-200';

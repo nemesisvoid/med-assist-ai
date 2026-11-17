@@ -47,7 +47,7 @@ const SelectDoctor = ({ form, userId, onConflict }: SelectDoctorProps) => {
 
   const handleDoctorSelect = async (field: any, doctorId: string) => {
     field.onChange(doctorId);
-    const { hasActive } = await checkActiveAppointment(userId, doctorId);
+    const { hasActive } = await checkActiveAppointment(doctorId);
     setConflictDoctorId(hasActive ? doctorId : null);
     onConflict(hasActive);
   };

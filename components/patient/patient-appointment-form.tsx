@@ -76,7 +76,7 @@ const PatientAppointmentForm = ({ userId }) => {
 
     startTransition(async () => {
       try {
-        const res = await createAppointment(userId, data);
+        const res = await createAppointment(data);
         if (!res.success) {
           toast.error(res.message);
           return;

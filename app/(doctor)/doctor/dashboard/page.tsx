@@ -28,10 +28,10 @@ const DoctorDashboardPage = async () => {
   const session = await getLoggedInUser();
   if (!session || session.user.role !== 'DOCTOR') return redirect('/auth/login');
 
-  const isDoctorProfile = await getDoctorProfile(session.user.id);
-  const appointments = await getDoctorsAppointments(session.user.id);
-  const notifications = await getUserNotifications(session.user.id);
-  const recentPatients = await getRecentPatients(session.user.id);
+  const isDoctorProfile = await getDoctorProfile();
+  const appointments = await getDoctorsAppointments();
+  const notifications = await getUserNotifications();
+  const recentPatients = await getRecentPatients();
 
   // Dynamic Metrics Calculations
   const upcomingCount = appointments.filter(item => isFuture(new Date(item.scheduledAt))).length;
@@ -49,7 +49,7 @@ const DoctorDashboardPage = async () => {
     intakeFormId: item.intakeForm?.id ?? undefined,
     patientName: item.patient.name,
     status: item.status,
-    riskLevel: item.riskLevel || 'LOW',
+    riskLevel: item.riskLevel ?? null,
     scheduledDate: item.scheduledAt,
   }));
 
@@ -143,7 +143,7 @@ const DoctorDashboardPage = async () => {
                       title: nextAppointment.title,
                       intakeFormId: nextAppointment.intakeForm?.id ?? undefined,
                       status: nextAppointment.status,
-                      riskLevel: nextAppointment.riskLevel || 'LOW',
+                      riskLevel: nextAppointment.riskLevel ?? null,
                     }}
                   />
                 ) : (
