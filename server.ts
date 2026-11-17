@@ -1,22 +1,39 @@
 /**
- * Standalone Socket.io server — runs on port 3001 alongside Next.js (:3000).
+ * Standalone Socket.io server for realtime messaging (deployed separately, e.g. Render).
  * Start with: npm run socket
  *
+ * Security model:
+ *  - Every connection must present a short-lived token issued by the Next.js app
+ *    (GET /api/socket-token) and signed with SOCKET_AUTH_SECRET. The user's
+ *    identity comes only from that token; ids sent by the browser are ignored.
+ *  - A user can only join, read, type in or send to conversations they are a
+ *    participant of. The sender and receiver of a message are derived on the
+ *    server from the conversation.
+ *  - Online/offline presence is only shared with people the user has a
+ *    conversation with.
+ *
  * Responsibilities:
- *  - Manage WebSocket connections
- *  - Track online/offline user presence
+ *  - Manage WebSocket connections and presence
  *  - Handle conversation rooms (join/leave)
- *  - Persist messages to PostgreSQL via Prisma
- *  - Broadcast real-time events to room participants
+ *  - Persist messages to PostgreSQL via Prisma and broadcast them to the room
  */
 
 import 'dotenv/config';
 import { createServer } from 'http';
-import { Server } from 'socket.io';
+import { Server, type Socket } from 'socket.io';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from './generated/prisma/client';
 import { MESSAGING_ALLOWED_STATUSES } from './lib/messaging-constants';
+import { verifySocketToken } from './lib/socket-token';
+
+const SOCKET_AUTH_SECRET = process.env.SOCKET_AUTH_SECRET ?? '';
+if (!SOCKET_AUTH_SECRET) {
+  console.error('❌ SOCKET_AUTH_SECRET is not set. It must match the value configured on the Next.js app. Refusing to start.');
+  process.exit(1);
+}
+
+const MAX_MESSAGE_LENGTH = 5000;
 
 // ─── Prisma setup (mirrors lib/prisma.ts but for standalone Node process) ──────
 
@@ -37,112 +54,132 @@ const io = new Server(httpServer, {
   // Ping/pong to detect stale connections quickly
   pingTimeout: 20000,
   pingInterval: 25000,
+  maxHttpBufferSize: 100_000,
 });
+
+type AuthedSocket = Socket & { data: { userId: string; role: string } };
+
+// ─── Authentication ───────────────────────────────────────────────────────────
+
+io.use(async (socket, next) => {
+  const claims = verifySocketToken(socket.handshake.auth?.token, SOCKET_AUTH_SECRET);
+  if (!claims) return next(new Error('unauthorized'));
+
+  // Suspended users lose their sessions, but also refuse a token minted just before suspension.
+  const user = await prisma.user.findUnique({ where: { id: claims.sub }, select: { banned: true } }).catch(() => null);
+  if (!user || user.banned) return next(new Error('unauthorized'));
+
+  socket.data.userId = claims.sub;
+  socket.data.role = claims.role;
+  next();
+});
+
+// ─── Access helpers ───────────────────────────────────────────────────────────
+
+const userRoom = (userId: string) => `user:${userId}`;
+const isString = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length < 200;
+
+/** The conversation, only if this user is one of its two participants. */
+function findConversationForUser(conversationId: unknown, userId: string) {
+  if (!isString(conversationId)) return Promise.resolve(null);
+  return prisma.conversation.findFirst({
+    where: { id: conversationId, OR: [{ patientId: userId }, { doctorId: userId }] },
+    select: {
+      id: true,
+      patientId: true,
+      doctorId: true,
+      activeAppointmentId: true,
+      chatLocksAt: true,
+      activeAppointment: { select: { status: true } },
+    },
+  });
+}
+
+/** Ids of everyone this user has a conversation with (the only people who see their presence). */
+async function getPartnerIds(userId: string): Promise<string[]> {
+  const conversations = await prisma.conversation.findMany({
+    where: { OR: [{ patientId: userId }, { doctorId: userId }] },
+    select: { patientId: true, doctorId: true },
+  });
+  return [...new Set(conversations.map(c => (c.patientId === userId ? c.doctorId : c.patientId)))];
+}
 
 // ─── Online presence tracking ────────────────────────────────────────────────────
 // userId → Set<socketId>  (multiple tabs = multiple sockets, same user)
 
 const onlineUsers = new Map<string, Set<string>>();
 
-function isUserOnline(userId: string): boolean {
-  return (onlineUsers.get(userId)?.size ?? 0) > 0;
-}
+const isUserOnline = (userId: string) => (onlineUsers.get(userId)?.size ?? 0) > 0;
 
-function setUserOnline(userId: string, socketId: string): void {
-  if (!onlineUsers.has(userId)) {
-    onlineUsers.set(userId, new Set());
-  }
+/** Returns true when this is the user's first open connection. */
+function setUserOnline(userId: string, socketId: string): boolean {
+  const wasOnline = isUserOnline(userId);
+  if (!onlineUsers.has(userId)) onlineUsers.set(userId, new Set());
   onlineUsers.get(userId)!.add(socketId);
+  return !wasOnline;
 }
 
+/** Returns true when the user's last connection closed. */
 function setUserOffline(userId: string, socketId: string): boolean {
   const sockets = onlineUsers.get(userId);
   if (!sockets) return false;
   sockets.delete(socketId);
   if (sockets.size === 0) {
     onlineUsers.delete(userId);
-    return true; // fully offline now
+    return true;
   }
-  return false; // still has other active tabs
+  return false;
 }
 
-// ─── Event types ─────────────────────────────────────────────────────────────────
-
-interface JoinRoomPayload {
-  conversationId: string;
-}
-
-interface SendMessagePayload {
-  conversationId: string;
-  senderId: string;
-  receiverId: string;
-  content: string;
-}
-
-interface TypingPayload {
-  conversationId: string;
-  userId: string;
-  isTyping: boolean;
-}
-
-interface GetUserStatusPayload {
-  targetUserId: string;
+async function broadcastPresence(userId: string, isOnline: boolean) {
+  const partners = await getPartnerIds(userId).catch(() => [] as string[]);
+  for (const partnerId of partners) io.to(userRoom(partnerId)).emit('user_status', { userId, isOnline });
 }
 
 // ─── Connection handler ───────────────────────────────────────────────────────────
 
-io.on('connection', async socket => {
-  const userId = socket.handshake.query.userId as string;
-
-  if (!userId || typeof userId !== 'string') {
-    console.warn(`[socket] Connection rejected — no userId`);
-    socket.disconnect(true);
-    return;
-  }
+io.on('connection', rawSocket => {
+  const socket = rawSocket as AuthedSocket;
+  const { userId } = socket.data;
 
   console.log(`[socket] User connected: ${userId} (socket: ${socket.id})`);
 
-  // ── Mark online ──────────────────────────────────────────────────────────────
-  setUserOnline(userId, socket.id);
+  socket.join(userRoom(userId));
+  if (setUserOnline(userId, socket.id)) void broadcastPresence(userId, true);
 
-  // Broadcast to everyone that this user is now online
-  io.emit('user_status', { userId, isOnline: true });
-
-  // ── Join a conversation room ─────────────────────────────────────────────────
-  socket.on('join_conversation', ({ conversationId }: JoinRoomPayload) => {
-    socket.join(conversationId);
-    console.log(`[socket] ${userId} joined room: ${conversationId}`);
+  // ── Join a conversation room (participants only) ─────────────────────────────
+  socket.on('join_conversation', async ({ conversationId }: { conversationId?: unknown } = {}) => {
+    const conversation = await findConversationForUser(conversationId, userId).catch(() => null);
+    if (!conversation) {
+      socket.emit('error', { message: 'Conversation not found.' });
+      return;
+    }
+    socket.join(conversation.id);
   });
 
   // ── Leave a conversation room ────────────────────────────────────────────────
-  socket.on('leave_conversation', ({ conversationId }: JoinRoomPayload) => {
-    socket.leave(conversationId);
-    console.log(`[socket] ${userId} left room: ${conversationId}`);
+  socket.on('leave_conversation', ({ conversationId }: { conversationId?: unknown } = {}) => {
+    if (isString(conversationId)) socket.leave(conversationId);
   });
 
   // ── Send a message ───────────────────────────────────────────────────────────
-  socket.on('send_message', async (payload: SendMessagePayload) => {
-    const { conversationId, senderId, receiverId, content } = payload;
-
-    if (!conversationId || !senderId || !receiverId || !content?.trim()) {
-      socket.emit('error', { message: 'Invalid message payload' });
+  // Any senderId/receiverId in the payload is ignored: the sender is the
+  // authenticated user and the receiver is the other participant.
+  socket.on('send_message', async (payload: { conversationId?: unknown; content?: unknown } = {}) => {
+    const content = typeof payload.content === 'string' ? payload.content.trim() : '';
+    if (!content || content.length > MAX_MESSAGE_LENGTH) {
+      socket.emit('error', { message: 'Invalid message.' });
       return;
     }
 
     try {
-      // 1. Fetch the conversation to verify the active appointment
-      const conversation = await prisma.conversation.findUnique({
-        where: { id: conversationId },
-        select: {
-          activeAppointmentId: true,
-          chatLocksAt: true,
-          activeAppointment: { select: { status: true } },
-        },
-      });
+      const conversation = await findConversationForUser(payload.conversationId, userId);
+      if (!conversation) {
+        socket.emit('error', { message: 'Conversation not found.' });
+        return;
+      }
 
-      const MESSAGING_ALLOWED = MESSAGING_ALLOWED_STATUSES as readonly string[];
-
-      if (!conversation?.activeAppointmentId) {
+      if (!conversation.activeAppointmentId) {
         socket.emit('error', { message: 'Messaging is unavailable — no active appointment.' });
         return;
       }
@@ -153,32 +190,35 @@ io.on('connection', async socket => {
         return;
       }
 
+      const allowed = MESSAGING_ALLOWED_STATUSES as readonly string[];
       const apptStatus = conversation.activeAppointment?.status;
-      if (!apptStatus || (apptStatus !== 'COMPLETED' && !MESSAGING_ALLOWED.includes(apptStatus))) {
+      if (!apptStatus || (apptStatus !== 'COMPLETED' && !allowed.includes(apptStatus))) {
         socket.emit('error', { message: 'Messaging is not permitted for the current appointment status.' });
         return;
       }
 
-      // 2. Persist with the active appointmentId stamped on the message
+      const receiverId = conversation.patientId === userId ? conversation.doctorId : conversation.patientId;
+
+      // Persist with the active appointmentId stamped on the message
       const message = await prisma.message.create({
         data: {
-          conversationId,
+          conversationId: conversation.id,
           appointmentId: conversation.activeAppointmentId,
-          senderId,
+          senderId: userId,
           receiverId,
-          content: content.trim(),
+          content,
           isRead: false,
         },
       });
 
-      // 3. Touch conversation timestamp so sidebar sorting stays correct
+      // Touch conversation timestamp so sidebar sorting stays correct
       await prisma.conversation.update({
-        where: { id: conversationId },
+        where: { id: conversation.id },
         data: { updatedAt: new Date() },
       });
 
-      // 4. Broadcast to all sockets in the room (sender included — for multi-tab)
-      const outgoing = {
+      // Broadcast to all sockets in the room (sender included — for multi-tab)
+      io.to(conversation.id).emit('new_message', {
         id: message.id,
         conversationId: message.conversationId,
         appointmentId: message.appointmentId,
@@ -188,37 +228,48 @@ io.on('connection', async socket => {
         createdAt: message.createdAt.toISOString(),
         isRead: message.isRead,
         messageStatus: message.messageStatus,
-      };
-
-      io.to(conversationId).emit('new_message', outgoing);
+      });
     } catch (err) {
       console.error('[socket] Failed to save message:', err);
       socket.emit('error', { message: 'Failed to send message. Please try again.' });
     }
   });
 
-  // ── Typing indicator ─────────────────────────────────────────────────────────
-  socket.on('typing', ({ conversationId, userId: typingUserId, isTyping }: TypingPayload) => {
-    // Broadcast to everyone else in the room
-    socket.to(conversationId).emit('typing', { userId: typingUserId, isTyping });
+  // ── Typing indicator (only in rooms this socket has joined) ──────────────────
+  socket.on('typing', ({ conversationId, isTyping }: { conversationId?: unknown; isTyping?: unknown } = {}) => {
+    if (!isString(conversationId) || !socket.rooms.has(conversationId)) return;
+    socket.to(conversationId).emit('typing', { userId, isTyping: isTyping === true });
   });
 
-  // ── Get online status of a specific user ─────────────────────────────────────
-  socket.on('get_user_status', ({ targetUserId }: GetUserStatusPayload) => {
-    const isOnline = isUserOnline(targetUserId);
-    console.log(`[socket] get_user_status requested by ${userId} for ${targetUserId} -> ${isOnline}`);
-    socket.emit('user_status', { userId: targetUserId, isOnline });
+  // ── Online status of a conversation partner ──────────────────────────────────
+  socket.on('get_user_status', async ({ targetUserId }: { targetUserId?: unknown } = {}) => {
+    if (!isString(targetUserId)) return;
+    const sharesConversation = await prisma.conversation
+      .findFirst({
+        where: {
+          OR: [
+            { patientId: userId, doctorId: targetUserId },
+            { patientId: targetUserId, doctorId: userId },
+          ],
+        },
+        select: { id: true },
+      })
+      .catch(() => null);
+    if (!sharesConversation) return;
+    socket.emit('user_status', { userId: targetUserId, isOnline: isUserOnline(targetUserId) });
   });
 
-  // ── Mark messages as read ─────────────────────────────────────────────────────
-  socket.on('mark_read', async ({ conversationId, readerId }: { conversationId: string; readerId: string }) => {
+  // ── Mark messages addressed to this user as read ─────────────────────────────
+  socket.on('mark_read', async ({ conversationId }: { conversationId?: unknown } = {}) => {
     try {
+      const conversation = await findConversationForUser(conversationId, userId);
+      if (!conversation) return;
       await prisma.message.updateMany({
-        where: { conversationId, receiverId: readerId, isRead: false },
+        where: { conversationId: conversation.id, receiverId: userId, isRead: false },
         data: { isRead: true },
       });
       // Tell the sender their messages were read
-      socket.to(conversationId).emit('messages_read', { conversationId, readerId });
+      socket.to(conversation.id).emit('messages_read', { conversationId: conversation.id, readerId: userId });
     } catch (err) {
       console.error('[socket] Failed to mark read:', err);
     }
@@ -227,22 +278,17 @@ io.on('connection', async socket => {
   // ── Disconnect ────────────────────────────────────────────────────────────────
   socket.on('disconnect', () => {
     console.log(`[socket] User disconnected: ${userId} (socket: ${socket.id})`);
-
-    const wentFullyOffline = setUserOffline(userId, socket.id);
-
-    if (wentFullyOffline) {
-      // Broadcast offline status (presence is tracked in-memory via onlineUsers)
-      io.emit('user_status', { userId, isOnline: false });
-    }
+    if (setUserOffline(userId, socket.id)) void broadcastPresence(userId, false);
   });
 });
 
 // ─── Start ────────────────────────────────────────────────────────────────────────
 
+// Hosts such as Render and Railway assign the port through PORT; SOCKET_PORT is for local dev.
 const PORT = parseInt(process.env.PORT ?? process.env.SOCKET_PORT ?? '3001', 10);
 
 httpServer.listen(PORT, () => {
-  console.log(`✅ Socket.io server running on http://localhost:${PORT}`);
+  console.log(`✅ Socket.io server running on port ${PORT}`);
   console.log(`   Accepting connections from: ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}`);
 });
 

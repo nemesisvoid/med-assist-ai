@@ -212,7 +212,8 @@ All variables are documented in [`.env.example`](.env.example).
 | `RESEND_API_KEY` | One email provider in production | Resend delivery. Needs a domain verified in Resend |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | One email provider in production | SMTP delivery via Nodemailer, e.g. Gmail with an app password. Used when Resend isn't configured |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional | Enables "Continue with Google". Redirect URI: `{BETTER_AUTH_URL}/api/auth/callback/google` |
-| `NEXT_PUBLIC_SOCKET_URL`, `SOCKET_PORT` | For chat | Where the Socket.IO server listens |
+| `NEXT_PUBLIC_SOCKET_URL`, `SOCKET_PORT` | For chat | Where the Socket.IO server listens (hosts like Render set `PORT`, which takes precedence) |
+| `SOCKET_AUTH_SECRET` | For chat | Signs chat connection tokens. Must be the **same value** on the Next.js app and the socket server |
 | `SEED_DOCTOR_PASSWORD` | Seeding | Password for demo doctor accounts |
 | `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_ADMIN_NAME` | Seeding | Creates the first administrator |
 | `EMAIL_TRANSPORT` | Local demos only | Set to `console` to print emails even in a production build. Never set this on a real deployment |
@@ -285,7 +286,7 @@ The app targets **Vercel + Neon**:
 2. Set the remaining variables from `.env.example`. Variables marked **Sensitive** in Vercel can't be read back later, so keep a copy in your secret manager.
 3. Run migrations as part of your release (`npx prisma migrate deploy`).
 4. Configure email: either Resend (`RESEND_API_KEY`, `EMAIL_FROM` on a verified domain) or SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`; Gmail with an app password works). In production, the app refuses to silently skip auth emails.
-5. Deploy the Socket.IO server (`server.ts`) to a host that supports long-lived WebSocket connections, then point `NEXT_PUBLIC_SOCKET_URL` at it.
+5. Deploy the Socket.IO server (`server.ts`) to a host that supports long-lived WebSocket connections (build: `npm install && npx prisma generate`, start: `npm run socket`). Give it `DATABASE_URL`, `NEXT_PUBLIC_APP_URL` (your app's URL, used for CORS) and `SOCKET_AUTH_SECRET`, then point `NEXT_PUBLIC_SOCKET_URL` on the app at it. The same `SOCKET_AUTH_SECRET` must be set on the app: the browser fetches a short-lived signed token from `/api/socket-token` and the socket server rejects connections without a valid one.
 
 ---
 
