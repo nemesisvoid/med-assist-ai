@@ -11,15 +11,19 @@ import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { createIntakeForm } from '@/actions/patient.action';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 
 type PatientIntakeFormProps = {
   appointmentId: string;
+  /** The doctor asked for updated information: the form replaces the earlier submission. */
+  isUpdate?: boolean;
   onSuccess?: () => void;
 };
 
-const PatientIntakeForm = ({ appointmentId, onSuccess }: PatientIntakeFormProps) => {
+const PatientIntakeForm = ({ appointmentId, isUpdate = false, onSuccess }: PatientIntakeFormProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   const {
     handleSubmit,
@@ -50,6 +54,8 @@ const PatientIntakeForm = ({ appointmentId, onSuccess }: PatientIntakeFormProps)
         toast.success(res.message);
         setIsOpen(false);
         reset();
+        // Re-render the appointment cards so the button switches to "Intake submitted".
+        router.refresh();
         if (onSuccess) onSuccess();
       } catch (error) {
         console.error('Failed to submit intake form:', error);
@@ -62,17 +68,24 @@ const PatientIntakeForm = ({ appointmentId, onSuccess }: PatientIntakeFormProps)
       open={isOpen}
       onOpenChange={setIsOpen}>
       <DialogTrigger>
-        <p className='text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all shadow-sm'>
+        <span
+          className={`text-xs font-bold text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all shadow-sm ${
+            isUpdate ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'
+          }`}>
           <ClipboardList size={14} />
-          Fill Intake Form
-        </p>
+          {isUpdate ? 'Update Intake Form' : 'Fill Intake Form'}
+        </span>
       </DialogTrigger>
 
       <DialogContent className='sm:max-w-[500px] max-h-[85vh] overflow-y-auto p-6'>
         <DialogHeader>
-          <DialogTitle className='text-lg font-bold text-slate-900'>Pre-Appointment Intake Form</DialogTitle>
+          <DialogTitle className='text-lg font-bold text-slate-900'>
+            {isUpdate ? 'Update Your Intake Form' : 'Pre-Appointment Intake Form'}
+          </DialogTitle>
           <DialogDescription className='text-slate-500 text-xs'>
-            Please outline your current symptoms and condition briefly. This helps your provider prepare ahead of your session.
+            {isUpdate
+              ? 'Your doctor asked for updated information. Your answers here replace your earlier submission.'
+              : 'Please outline your current symptoms and condition briefly. This helps your provider prepare ahead of your session.'}
           </DialogDescription>
         </DialogHeader>
 

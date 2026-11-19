@@ -700,6 +700,7 @@ export const requestUpdatedIntakeAction = async (appointmentId: string) => {
         type: 'INTAKE_FORM',
         title: 'Updated Intake Form Requested',
         message: 'Your healthcare provider has requested updated intake information. Please review and resubmit.',
+        link: '/patient/appointment',
       },
     });
 
