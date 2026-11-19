@@ -10,6 +10,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { getSocket } from '@/lib/socket-client';
+import type { AttachmentInfo } from '@/lib/attachments';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -30,6 +31,7 @@ export type SocketMessage = {
   createdAt: string | Date;
   isRead: boolean;
   messageStatus?: string;
+  attachments?: AttachmentInfo[];
 };
 
 type UseSocketOptions = {
@@ -50,7 +52,7 @@ type UseSocketReturn = {
   isTyping: boolean;
   /** The other participant is currently online */
   partnerOnline: boolean;
-  sendMessage: (content: string) => void;
+  sendMessage: (content: string, attachment?: AttachmentInfo) => void;
   sendTyping: (isCurrentlyTyping: boolean) => void;
 };
 
@@ -85,9 +87,14 @@ export function useSocket({
         // Skip if exact id already present (duplicate from server)
         if (prev.some(m => m.id === msg.id)) return prev;
 
-        // Replace matching optimistic message (same sender + same content)
+        // Replace matching optimistic message (same sender, same text, same attachment)
+        const attachmentKey = (m: SocketMessage) => m.attachments?.[0]?.id ?? '';
         const optimisticIdx = prev.findIndex(
-          m => m.id.startsWith('optimistic-') && m.senderId === msg.senderId && m.content === msg.content,
+          m =>
+            m.id.startsWith('optimistic-') &&
+            m.senderId === msg.senderId &&
+            (m.content ?? '') === (msg.content ?? '') &&
+            attachmentKey(m) === attachmentKey(msg),
         );
         if (optimisticIdx !== -1) {
           const next = [...prev];
@@ -191,8 +198,8 @@ export function useSocket({
   // ── Actions ──────────────────────────────────────────────────────────────────
 
   const sendMessage = useCallback(
-    (content: string) => {
-      if (!conversationId || !receiverId || !content.trim()) return;
+    (content: string, attachment?: AttachmentInfo) => {
+      if (!conversationId || !receiverId || (!content.trim() && !attachment)) return;
       const socket = getSocket(userId);
 
       // Optimistic update — sender sees message instantly without waiting for server echo
@@ -201,17 +208,18 @@ export function useSocket({
         conversationId,
         senderId: userId,
         receiverId,
-        content: content.trim(),
+        content: content.trim() || null,
         createdAt: new Date().toISOString(),
         isRead: false,
+        attachments: attachment ? [attachment] : [],
       };
       setMessages(prev => [...prev, optimisticMsg]);
 
+      // Identity is taken from the authenticated socket on the server, not from this payload.
       socket.emit('send_message', {
         conversationId,
-        senderId: userId,
-        receiverId,
         content: content.trim(),
+        attachmentId: attachment?.id,
       });
     },
     [userId, conversationId, receiverId],

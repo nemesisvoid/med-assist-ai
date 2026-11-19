@@ -21,7 +21,7 @@ const PatientMessagePage = async () => {
         appointmentType: c.activeAppointment?.appointmentType,
         appointmentStatus: c.activeAppointment?.status,
         unread: c.messages.filter((m: any) => !m.isRead && m.senderId !== loggedInUser.user.id).length,
-        lastMessage: c.messages[c.messages.length - 1]?.content ?? undefined,
+        lastMessage: c.messages[c.messages.length - 1]?.content || (c.messages[c.messages.length - 1]?.attachments?.length ? 'Sent an attachment' : undefined),
         // Active appointment for the chat section banner & lock logic
         activeAppointment: c.activeAppointment ? {
             id: c.activeAppointment.id,
@@ -49,6 +49,7 @@ const PatientMessagePage = async () => {
             createdAt: m.createdAt,
             isRead: m.isRead,
             messageStatus: m.messageStatus ?? undefined,
+            attachments: m.attachments ?? [],
         })),
     }));
 

@@ -1,7 +1,11 @@
 'use server'
 
+import { randomUUID } from 'node:crypto';
 import { prisma } from "@/lib/prisma";
 import { getSessionWithRole } from '@/lib/authz';
+import { MESSAGING_ALLOWED_STATUSES } from '@/lib/messaging-constants';
+import { sanitizeFileName, validateAttachment, type AttachmentInfo } from '@/lib/attachments';
+import { createUploadUrl, getObjectSize, isStorageConfigured } from '@/lib/storage';
 
 /*
  * Messaging server actions. Each one works only on conversations the signed-in
@@ -27,6 +31,7 @@ export const getPatientMessages = async () => {
                         appointment: {
                             select: { id: true, status: true, appointmentType: true, scheduledAt: true },
                         },
+                        attachments: { select: { id: true, fileName: true, mimeType: true, size: true } },
                     },
                 },
                 doctor: {
@@ -66,6 +71,7 @@ export const getDoctorMessages = async () => {
                         appointment: {
                             select: { id: true, status: true, appointmentType: true, scheduledAt: true },
                         },
+                        attachments: { select: { id: true, fileName: true, mimeType: true, size: true } },
                     },
                 },
                 patient: {
@@ -219,5 +225,91 @@ export const createOrOpenConversation = async ({ appointmentId }: { appointmentI
     } catch (error) {
         console.error('[createOrOpenConversation]', error);
         return { success: false, message: 'Failed to create or open conversation' };
+    }
+};
+
+// ─── Attachments ──────────────────────────────────────────────────────────────
+/*
+ * Upload flow: createAttachmentUpload → browser PUTs the file to the signed URL
+ * → confirmAttachmentUpload → the socket server links the confirmed attachment
+ * to the message the user sends.
+ */
+
+const MAX_PENDING_UPLOADS_PER_HOUR = 30;
+
+/** The conversation if the user is a participant and messaging is currently open in it. */
+async function getWritableConversation(conversationId: string, userId: string) {
+    const conversation = await prisma.conversation.findFirst({
+        where: { id: conversationId, OR: [{ patientId: userId }, { doctorId: userId }] },
+        select: { id: true, activeAppointmentId: true, chatLocksAt: true, activeAppointment: { select: { status: true } } },
+    });
+    if (!conversation?.activeAppointmentId) return null;
+    if (conversation.chatLocksAt && new Date() > conversation.chatLocksAt) return null;
+    const status = conversation.activeAppointment?.status;
+    if (!status || !(MESSAGING_ALLOWED_STATUSES as readonly string[]).includes(status)) return null;
+    return conversation;
+}
+
+export const createAttachmentUpload = async (input: { conversationId: string; fileName: string; mimeType: string; size: number }) => {
+    const session = await getSessionWithRole('PATIENT', 'DOCTOR');
+    if (!session) return { success: false as const, message: 'Please sign in to continue.' };
+    if (!isStorageConfigured()) return { success: false as const, message: 'File sharing is not set up on this server yet.' };
+
+    const invalid = validateAttachment({ type: String(input?.mimeType ?? ''), size: Number(input?.size ?? 0) });
+    if (invalid) return { success: false as const, message: invalid };
+
+    try {
+        const conversation = await getWritableConversation(String(input.conversationId ?? ''), session.user.id);
+        if (!conversation) return { success: false as const, message: 'You can’t share files in this conversation.' };
+
+        const recent = await prisma.messageAttachment.count({
+            where: { uploaderId: session.user.id, createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) } },
+        });
+        if (recent >= MAX_PENDING_UPLOADS_PER_HOUR) {
+            return { success: false as const, message: 'You’ve shared a lot of files recently. Please try again later.' };
+        }
+
+        // The storage key never contains the user's file name.
+        const storageKey = `conversations/${conversation.id}/${randomUUID()}`;
+        const attachment = await prisma.messageAttachment.create({
+            data: {
+                conversationId: conversation.id,
+                uploaderId: session.user.id,
+                storageKey,
+                fileName: sanitizeFileName(input.fileName),
+                mimeType: input.mimeType,
+                size: input.size,
+            },
+            select: { id: true },
+        });
+        const uploadUrl = await createUploadUrl(storageKey, input.mimeType, input.size);
+        return { success: true as const, attachmentId: attachment.id, uploadUrl };
+    } catch (error) {
+        console.error('[createAttachmentUpload]', error);
+        return { success: false as const, message: 'Could not prepare the upload. Please try again.' };
+    }
+};
+
+/** Marks an upload as complete after checking the file really is in storage with the declared size. */
+export const confirmAttachmentUpload = async (attachmentId: string) => {
+    const session = await getSessionWithRole('PATIENT', 'DOCTOR');
+    if (!session) return { success: false as const, message: 'Please sign in to continue.' };
+    try {
+        const attachment = await prisma.messageAttachment.findFirst({
+            where: { id: String(attachmentId ?? ''), uploaderId: session.user.id, messageId: null },
+        });
+        if (!attachment) return { success: false as const, message: 'Upload not found.' };
+
+        const storedSize = await getObjectSize(attachment.storageKey);
+        if (storedSize === null || storedSize !== attachment.size) {
+            return { success: false as const, message: 'The upload did not complete. Please try again.' };
+        }
+
+        await prisma.messageAttachment.update({ where: { id: attachment.id }, data: { uploadedAt: new Date() } });
+        const info: AttachmentInfo = { id: attachment.id, fileName: attachment.fileName, mimeType: attachment.mimeType, size: attachment.size };
+        return { success: true as const, attachment: info };
+    } catch (error) {
+        console.error('[confirmAttachmentUpload]', error);
+        return { success: false as const, message: 'Could not confirm the upload. Please try again.' };
     }
 };
