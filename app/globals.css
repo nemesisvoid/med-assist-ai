@@ -217,3 +217,9 @@
   background: rgba(22, 119, 255, 0.08);
   pointer-events: none;
 }
+
+/* Video call pre-join: the participant's name comes from the server-signed room
+   pass, so LiveKit's editable name field is hidden (the Join button stays). */
+.mai-prejoin .lk-username-container > input {
+  display: none;
+}

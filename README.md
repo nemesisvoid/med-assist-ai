@@ -30,6 +30,7 @@ MedAssist AI is a telehealth platform that connects patients with doctors and cu
 - **Appointment journey tracker** from intake through to a completed visit.
 - **Visit summaries** written for patients, plus diagnosis, treatment plan and prescriptions.
 - **Notifications** and **real-time messaging** with the assigned doctor, including **image and file attachments** (photos, PDFs, Word and text files up to 10 MB).
+- **Video consultations** with their clinician from the appointment page or chat, with a camera and microphone check before joining.
 
 ### Clinicians (doctors and therapists)
 
@@ -116,6 +117,7 @@ Clinicians are either **doctors** (shown as "Dr. Name") or **therapists** (shown
 | AI | Google Gemini via [`@google/genai`](https://www.npmjs.com/package/@google/genai) (risk analysis, SOAP drafts, patient summaries) |
 | Real-time | [Socket.IO 4](https://socket.io) (standalone server in `server.ts`) |
 | File storage | [Cloudflare R2](https://developers.cloudflare.com/r2/) (private bucket, S3 API via `@aws-sdk/client-s3`) for chat attachments |
+| Video | [LiveKit](https://livekit.io) (`livekit-server-sdk` for room passes, `@livekit/components-react` for the call UI) |
 | Email | [Resend](https://resend.com) REST API or any SMTP server via [Nodemailer](https://nodemailer.com) (console output in development) |
 | Notifications UI | Sonner toasts |
 | Dates | date-fns 4 |
@@ -227,6 +229,7 @@ All variables are documented in [`.env.example`](.env.example).
 | `SOCKET_AUTH_SECRET` | For chat | Signs chat connection tokens. Must be the **same value** on the Next.js app and the socket server |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | For chat attachments | Private Cloudflare R2 bucket for files shared in chat. App only; see [Deployment](#deployment) |
 | `CRON_SECRET` | For chat attachments | Authorises the daily job that deletes uploads that were never sent |
+| `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `NEXT_PUBLIC_LIVEKIT_URL` | For video calls | LiveKit Cloud project keys and `wss://` URL. App only |
 | `EMAIL_TRANSPORT` | Local testing only | Set to `console` to print emails even in a production build. Never set this on a real deployment |
 
 ---
@@ -260,6 +263,7 @@ MedAssist AI is built with HIPAA-conscious patterns. Real deployments still need
   - Every attachment view is written to the audit log (without the file name, which can itself reveal health information).
   - Uploads that are never sent are deleted after 24 hours.
   - Senders can delete a message, including its files, within 15 minutes of sending; the deletion is audit-logged. After that the message is part of the care record and is kept, since medical records have legal retention periods.
+- **Video calls.** One LiveKit room per appointment. Room passes are signed on the server only for the appointment's patient and assigned clinician, expire after an hour, and every join is audit-logged. Calls aren't recorded, and the in-call chat is disabled so conversations stay in the saved, audited chat.
 
 ---
 
@@ -312,6 +316,7 @@ The app targets **Vercel + Neon**:
       ```
    4. Set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_BUCKET` on the app (Vercel) and redeploy.
    5. Set `CRON_SECRET` on Vercel. `vercel.json` schedules a daily job that deletes uploads never sent within 24 hours; Vercel authenticates it with this secret.
+7. Set up video calls (optional): create a project at [LiveKit Cloud](https://cloud.livekit.io), then under **Settings → Keys** create an API key. Set `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` and `NEXT_PUBLIC_LIVEKIT_URL` (the project's `wss://…livekit.cloud` URL) on Vercel and redeploy. Each appointment gets its own room; passes are issued only to that appointment's patient and assigned clinician, last one hour, and every join is audit-logged. Calls are not recorded.
 
 ---
 
