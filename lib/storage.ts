@@ -9,7 +9,7 @@
  * client components.
  */
 
-import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectsCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const UPLOAD_URL_TTL_SECONDS = 5 * 60;
@@ -79,4 +79,17 @@ export async function createDownloadUrl(
     new GetObjectCommand({ Bucket: bucket, Key: key, ResponseContentType: mimeType, ResponseContentDisposition: disposition }),
     { expiresIn: DOWNLOAD_URL_TTL_SECONDS },
   );
+}
+
+/** Permanently deletes objects (up to 1000 per call). Missing keys are not an error. */
+export async function deleteObjects(keys: string[]): Promise<void> {
+  if (keys.length === 0) return;
+  const { client, bucket } = storage();
+  for (let i = 0; i < keys.length; i += 1000) {
+    const batch = keys.slice(i, i + 1000);
+    const res = await client.send(
+      new DeleteObjectsCommand({ Bucket: bucket, Delete: { Objects: batch.map(Key => ({ Key })), Quiet: true } }),
+    );
+    if (res.Errors?.length) throw new Error(`Failed to delete ${res.Errors.length} object(s) from storage`);
+  }
 }

@@ -260,6 +260,18 @@ io.on('connection', rawSocket => {
     }
   });
 
+  // ── A message was deleted by its sender (through the app's deleteMessage action) ──
+  // Only relayed if the database confirms this user sent it and it really is deleted,
+  // so a client can't make someone else's message disappear on screen.
+  socket.on('message_deleted', async ({ messageId }: { messageId?: unknown } = {}) => {
+    if (!isString(messageId)) return;
+    const message = await prisma.message
+      .findFirst({ where: { id: messageId, senderId: userId, deletedAt: { not: null } }, select: { id: true, conversationId: true } })
+      .catch(() => null);
+    if (!message) return;
+    io.to(message.conversationId).emit('message_deleted', { messageId: message.id, conversationId: message.conversationId });
+  });
+
   // ── Typing indicator (only in rooms this socket has joined) ──────────────────
   socket.on('typing', ({ conversationId, isTyping }: { conversationId?: unknown; isTyping?: unknown } = {}) => {
     if (!isString(conversationId) || !socket.rooms.has(conversationId)) return;

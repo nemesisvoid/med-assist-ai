@@ -226,6 +226,7 @@ All variables are documented in [`.env.example`](.env.example).
 | `NEXT_PUBLIC_SOCKET_URL`, `SOCKET_PORT` | For chat | Where the Socket.IO server listens (hosts like Render set `PORT`, which takes precedence) |
 | `SOCKET_AUTH_SECRET` | For chat | Signs chat connection tokens. Must be the **same value** on the Next.js app and the socket server |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | For chat attachments | Private Cloudflare R2 bucket for files shared in chat. App only; see [Deployment](#deployment) |
+| `CRON_SECRET` | For chat attachments | Authorises the daily job that deletes uploads that were never sent |
 | `EMAIL_TRANSPORT` | Local testing only | Set to `console` to print emails even in a production build. Never set this on a real deployment |
 
 ---
@@ -255,6 +256,10 @@ MedAssist AI is built with HIPAA-conscious patterns. Real deployments still need
 - **Account security**: required email verification, single-use one-hour reset links, sign-out everywhere on password reset or suspension, rate-limited auth endpoints, and server-assigned roles (clients can't set a role).
 - **Credential hygiene.** Staff accounts are created without a password, and the invitee chooses one through an emailed link.
 - **Private attachments.** Chat files live in a private bucket under random keys. Browsers upload with 5-minute signed URLs bound to one file's type and size, and every download goes through `/api/attachments/[id]`, which checks the viewer is in the conversation before redirecting to a 60-second signed link. Admins can't open attachments.
+  - Photos are re-encoded in the browser before upload, which strips hidden EXIF metadata such as GPS location.
+  - Every attachment view is written to the audit log (without the file name, which can itself reveal health information).
+  - Uploads that are never sent are deleted after 24 hours.
+  - Senders can delete a message, including its files, within 15 minutes of sending; the deletion is audit-logged. After that the message is part of the care record and is kept, since medical records have legal retention periods.
 
 ---
 
@@ -306,6 +311,7 @@ The app targets **Vercel + Neon**:
       [{ "AllowedOrigins": ["https://your-app.vercel.app"], "AllowedMethods": ["PUT", "GET"], "AllowedHeaders": ["content-type"], "MaxAgeSeconds": 3600 }]
       ```
    4. Set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_BUCKET` on the app (Vercel) and redeploy.
+   5. Set `CRON_SECRET` on Vercel. `vercel.json` schedules a daily job that deletes uploads never sent within 24 hours; Vercel authenticates it with this secret.
 
 ---
 

@@ -4,20 +4,21 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
     ImageIcon, InfoIcon, SendIcon, VideoIcon, WifiOff,
     CalendarDays, ExternalLink, Lock, CheckCheck,
-    FileTextIcon, XIcon, Loader2Icon, DownloadIcon,
+    FileTextIcon, XIcon, Loader2Icon, DownloadIcon, Trash2Icon, BanIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { confirmAttachmentUpload, createAttachmentUpload } from '@/actions/message.action';
 import {
     FILE_ACCEPT, IMAGE_ACCEPT, formatFileSize, isImageAttachment, validateAttachment, type AttachmentInfo,
 } from '@/lib/attachments';
+import { stripImageMetadata } from '@/lib/strip-image-metadata';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { cn } from '@/lib/utils';
 import { AttachIcon } from './chat-utils';
 import { useSocket, type SocketMessage } from '@/hooks/use-socket';
 import { format, differenceInDays } from 'date-fns';
-import { MESSAGING_ALLOWED_STATUSES } from '@/lib/messaging-constants';
+import { MESSAGE_DELETE_WINDOW_MS, MESSAGING_ALLOWED_STATUSES } from '@/lib/messaging-constants';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -93,7 +94,7 @@ const ChatSection = ({ selectedConversationId, selectedConversation, userId, use
 
     const receiverId = selectedConversation?.partnerId ?? null;
 
-    const { messages, isConnected, isTyping, partnerOnline, sendMessage, sendTyping } = useSocket({
+    const { messages, isConnected, isTyping, partnerOnline, sendMessage, sendTyping, deleteMessage } = useSocket({
         userId,
         conversationId: selectedConversationId,
         receiverId,
@@ -135,7 +136,22 @@ const ChatSection = ({ selectedConversationId, selectedConversation, userId, use
     };
 
     /** Uploads straight to private storage via a signed URL, then confirms it with the server. */
-    const uploadAttachment = async (file: File, conversationId: string): Promise<AttachmentInfo | null> => {
+    const uploadAttachment = async (original: File, conversationId: string): Promise<AttachmentInfo | null> => {
+        // Remove hidden photo metadata (e.g. GPS location) before anything leaves the device.
+        // If that fails, don't fall back to the original: it could reveal where the patient is.
+        let file: File;
+        try {
+            file = await stripImageMetadata(original);
+        } catch {
+            toast.error('This image couldn’t be prepared safely. Try a JPEG or PNG, or take a screenshot of it.');
+            return null;
+        }
+        const problem = validateAttachment(file);
+        if (problem) {
+            toast.error(problem);
+            return null;
+        }
+
         const slot = await createAttachmentUpload({ conversationId, fileName: file.name, mimeType: file.type, size: file.size });
         if (!slot.success) {
             toast.error(slot.message);
@@ -401,7 +417,7 @@ const ChatSection = ({ selectedConversationId, selectedConversation, userId, use
                                     {group.messages.map(msg => (
                                         msg.messageStatus === 'SYSTEM'
                                             ? <SystemMessageCard key={msg.id} content={msg.content ?? ''} createdAt={msg.createdAt} />
-                                            : <MessageBubble key={msg.id} message={msg} currentUserId={userId} />
+                                            : <MessageBubble key={msg.id} message={msg} currentUserId={userId} onDelete={deleteMessage} />
                                     ))}
                                 </div>
                             ))
@@ -616,16 +632,84 @@ const AppointmentSeparator = ({
 
 // ─── MessageBubble ─────────────────────────────────────────────────────────────
 
-const MessageBubble = ({ message, currentUserId }: { message: SocketMessage; currentUserId: string }) => {
+const MessageBubble = ({
+    message,
+    currentUserId,
+    onDelete,
+}: {
+    message: SocketMessage;
+    currentUserId: string;
+    onDelete: (messageId: string) => Promise<string | null>;
+}) => {
     const isMine = message.senderId === currentUserId;
+    const [confirming, setConfirming] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+
+    // The sender can delete for MESSAGE_DELETE_WINDOW_MS; the button disappears when the window closes.
+    const deleteDeadline = new Date(message.createdAt).getTime() + MESSAGE_DELETE_WINDOW_MS;
+    const [withinDeleteWindow, setWithinDeleteWindow] = useState(() => Date.now() < deleteDeadline);
+    useEffect(() => {
+        if (!withinDeleteWindow) return;
+        const t = setTimeout(() => setWithinDeleteWindow(false), Math.max(0, deleteDeadline - Date.now()));
+        return () => clearTimeout(t);
+    }, [withinDeleteWindow, deleteDeadline]);
 
     const timeStr = (() => {
         try { return format(new Date(message.createdAt), 'h:mm a'); }
         catch { return ''; }
     })();
 
+    // Ask for a second click; the confirmation quietly expires so a stray click can't delete later.
+    useEffect(() => {
+        if (!confirming) return;
+        const t = setTimeout(() => setConfirming(false), 4000);
+        return () => clearTimeout(t);
+    }, [confirming]);
+
+    if (message.deletedAt) {
+        return (
+            <div className={cn('flex', isMine ? 'justify-end' : 'justify-start')}>
+                <p className='flex items-center gap-1.5 rounded-2xl border border-dashed border-slate-200 px-4 py-2 text-xs italic text-slate-400'>
+                    <BanIcon size={12} aria-hidden />
+                    {isMine ? 'You deleted this message' : 'This message was deleted'}
+                </p>
+            </div>
+        );
+    }
+
+    const canDelete = isMine && withinDeleteWindow && !message.id.startsWith('optimistic-');
+
+    const handleDelete = async () => {
+        if (!confirming) {
+            setConfirming(true);
+            return;
+        }
+        setDeleting(true);
+        const error = await onDelete(message.id);
+        setDeleting(false);
+        setConfirming(false);
+        if (error) toast.error(error);
+    };
+
     return (
-        <div className={cn('flex', isMine ? 'justify-end' : 'justify-start')}>
+        <div className={cn('group flex items-center gap-1.5', isMine ? 'justify-end' : 'justify-start')}>
+            {canDelete && (
+                <button
+                    type='button'
+                    onClick={() => void handleDelete()}
+                    disabled={deleting}
+                    aria-label={confirming ? 'Confirm delete message' : 'Delete message'}
+                    title='You can delete a message for 15 minutes after sending it'
+                    className={cn(
+                        'flex h-7 shrink-0 items-center gap-1 rounded-lg px-2 text-[11px] font-semibold transition-all cursor-pointer focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+                        confirming
+                            ? 'bg-red-50 text-red-600 opacity-100'
+                            : 'text-slate-400 hover:bg-slate-100 hover:text-red-600 sm:opacity-0 sm:group-hover:opacity-100',
+                    )}>
+                    {deleting ? <Loader2Icon size={13} className='animate-spin' /> : <Trash2Icon size={13} aria-hidden />}
+                    {confirming && !deleting && 'Delete?'}
+                </button>
+            )}
             <div className={cn(
                 'max-w-[72%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed shadow-sm',
                 isMine

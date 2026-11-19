@@ -11,6 +11,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { getSocket } from '@/lib/socket-client';
 import type { AttachmentInfo } from '@/lib/attachments';
+import { deleteMessage as deleteMessageAction } from '@/actions/message.action';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -32,6 +33,8 @@ export type SocketMessage = {
   isRead: boolean;
   messageStatus?: string;
   attachments?: AttachmentInfo[];
+  /** Set when the sender deleted the message; content and files are gone. */
+  deletedAt?: string | null;
 };
 
 type UseSocketOptions = {
@@ -54,7 +57,11 @@ type UseSocketReturn = {
   partnerOnline: boolean;
   sendMessage: (content: string, attachment?: AttachmentInfo) => void;
   sendTyping: (isCurrentlyTyping: boolean) => void;
+  /** Deletes the user's own recent message. Returns an error message, or null on success. */
+  deleteMessage: (messageId: string) => Promise<string | null>;
 };
+
+const asDeleted = (m: SocketMessage): SocketMessage => ({ ...m, content: null, attachments: [], deletedAt: m.deletedAt ?? new Date().toISOString() });
 
 // ─── Hook ──────────────────────────────────────────────────────────────────────
 
@@ -127,9 +134,15 @@ export function useSocket({
       }
     };
 
+    /** The other participant (or another tab) deleted a message */
+    const onMessageDeleted = ({ messageId }: { messageId: string }) => {
+      setMessages(prev => prev.map(m => (m.id === messageId ? asDeleted(m) : m)));
+    };
+
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('new_message', onNewMessage);
+    socket.on('message_deleted', onMessageDeleted);
     socket.on('typing', onTyping);
     socket.on('user_status', onUserStatus);
 
@@ -140,6 +153,7 @@ export function useSocket({
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
       socket.off('new_message', onNewMessage);
+      socket.off('message_deleted', onMessageDeleted);
       socket.off('typing', onTyping);
       socket.off('user_status', onUserStatus);
     };
@@ -234,7 +248,20 @@ export function useSocket({
     [userId, conversationId],
   );
 
+  const deleteMessage = useCallback(
+    async (messageId: string) => {
+      const res = await deleteMessageAction(messageId);
+      if (!res.success) return res.message;
+      setMessages(prev => prev.map(m => (m.id === messageId ? asDeleted(m) : m)));
+      // The socket server checks the database before relaying this to the other participant.
+      getSocket(userId).emit('message_deleted', { messageId });
+      return null;
+    },
+    [userId],
+  );
+
   return {
+    deleteMessage,
     messages,
     isConnected,
     isTyping,

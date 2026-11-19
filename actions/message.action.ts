@@ -3,9 +3,12 @@
 import { randomUUID } from 'node:crypto';
 import { prisma } from "@/lib/prisma";
 import { getSessionWithRole } from '@/lib/authz';
-import { MESSAGING_ALLOWED_STATUSES } from '@/lib/messaging-constants';
+import { MESSAGE_DELETE_WINDOW_MS, MESSAGING_ALLOWED_STATUSES } from '@/lib/messaging-constants';
 import { sanitizeFileName, validateAttachment, type AttachmentInfo } from '@/lib/attachments';
-import { createUploadUrl, getObjectSize, isStorageConfigured } from '@/lib/storage';
+import { createUploadUrl, deleteObjects, getObjectSize, isStorageConfigured } from '@/lib/storage';
+import { recordAudit } from '@/lib/audit';
+import { cleanupStaleUploads } from '@/lib/attachment-cleanup';
+import { after } from 'next/server';
 
 /*
  * Messaging server actions. Each one works only on conversations the signed-in
@@ -283,6 +286,9 @@ export const createAttachmentUpload = async (input: { conversationId: string; fi
             select: { id: true },
         });
         const uploadUrl = await createUploadUrl(storageKey, input.mimeType, input.size);
+        // Also clear this user's own uploads that were never sent (works even without the daily cron).
+        const uploaderId = session.user.id;
+        after(() => cleanupStaleUploads({ uploaderId, maxBatches: 1 }).catch(error => console.error('[attachments] cleanup failed:', error)));
         return { success: true as const, attachmentId: attachment.id, uploadUrl };
     } catch (error) {
         console.error('[createAttachmentUpload]', error);
@@ -311,5 +317,52 @@ export const confirmAttachmentUpload = async (attachmentId: string) => {
     } catch (error) {
         console.error('[confirmAttachmentUpload]', error);
         return { success: false as const, message: 'Could not confirm the upload. Please try again.' };
+    }
+};
+
+// ─── Deleting a message ───────────────────────────────────────────────────────
+
+/**
+ * Lets the sender delete their own message within MESSAGE_DELETE_WINDOW_MS of
+ * sending it (e.g. the wrong photo or the wrong person). The text and any files
+ * are permanently removed; a placeholder stays so the conversation still reads
+ * correctly, and the deletion is audit-logged. After the window the message is
+ * part of the care record and can't be deleted.
+ */
+export const deleteMessage = async (messageId: string) => {
+    const session = await getSessionWithRole('PATIENT', 'DOCTOR');
+    if (!session) return { success: false as const, message: 'Please sign in to continue.' };
+
+    try {
+        const message = await prisma.message.findFirst({
+            where: { id: String(messageId ?? ''), senderId: session.user.id, deletedAt: null, messageStatus: { not: 'SYSTEM' } },
+            select: { id: true, conversationId: true, createdAt: true, attachments: { select: { id: true, storageKey: true } } },
+        });
+        if (!message) return { success: false as const, message: 'Message not found.' };
+        if (Date.now() - message.createdAt.getTime() > MESSAGE_DELETE_WINDOW_MS) {
+            return { success: false as const, message: 'Messages can only be deleted within 15 minutes of sending.' };
+        }
+
+        // Remove the files from storage first, so a failure never leaves a "deleted" message whose file still exists.
+        if (message.attachments.length) await deleteObjects(message.attachments.map(a => a.storageKey));
+
+        await prisma.$transaction([
+            prisma.messageAttachment.deleteMany({ where: { messageId: message.id } }),
+            prisma.message.update({ where: { id: message.id }, data: { content: null, deletedAt: new Date() } }),
+        ]);
+
+        await recordAudit({
+            actorId: session.user.id,
+            action: 'MESSAGE_DELETED',
+            entityType: 'Message',
+            entityId: message.id,
+            summary: message.attachments.length ? 'Deleted own chat message with an attachment' : 'Deleted own chat message',
+            metadata: { conversationId: message.conversationId, attachments: message.attachments.length },
+        });
+
+        return { success: true as const };
+    } catch (error) {
+        console.error('[deleteMessage]', error);
+        return { success: false as const, message: 'Could not delete the message. Please try again.' };
     }
 };
