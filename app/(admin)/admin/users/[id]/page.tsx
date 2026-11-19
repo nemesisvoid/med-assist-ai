@@ -17,6 +17,7 @@ import {
 } from '@/components/admin/admin-ui';
 import { AuditActionIcon, AUDIT_ACTION_META } from '@/components/admin/audit-meta';
 import { UserDetailActions } from '@/components/admin/user-actions';
+import { ResendInviteButton } from '@/components/admin/doctor-actions';
 import { getUserDetail } from '@/lib/data/admin';
 import { requireAdminPage } from '@/lib/authz';
 
@@ -32,6 +33,8 @@ const UserDetailPage = async ({ params }: { params: Promise<{ id: string }> }) =
 
   const { user, activity } = detail;
   const isSelf = user.id === session.user.id;
+  // Invited staff (doctor or admin) who haven't set a password yet.
+  const invitePending = (user.role === 'DOCTOR' || user.role === 'ADMIN') && user.accounts.length === 0;
 
   const facts: { label: string; value: React.ReactNode }[] = [
     { label: 'Email', value: <span className='break-all'>{user.email}</span> },
@@ -78,12 +81,13 @@ const UserDetailPage = async ({ params }: { params: Promise<{ id: string }> }) =
             <AccountStatusBadge
               banned={user.banned}
               emailVerified={user.emailVerified}
-              invitePending={user.role === 'DOCTOR' && user.accounts.length === 0}
+              invitePending={invitePending}
             />
             {isSelf && <span className='text-xs font-medium text-slate-500'>(you)</span>}
           </div>
           <p className='mt-0.5 truncate text-sm text-slate-500'>{user.email}</p>
         </div>
+        {invitePending && !user.banned && <ResendInviteButton userId={user.id} />}
       </header>
 
       {user.banned && (

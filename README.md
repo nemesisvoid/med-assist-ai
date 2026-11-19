@@ -41,6 +41,7 @@ MedAssist AI is a telehealth platform that connects patients with doctors and cu
 ### Administrators
 - **Platform dashboard**: patient growth, active doctors, 30-day appointment volume with period-over-period change, completion rate, tiles for high-risk, unassigned and suspended items that need attention, the status pipeline, doctor workload and recent activity.
 - **User management**: search by name, email or MRN; filter by role and status; change roles; suspend and reactivate accounts with a recorded reason; sign a user out of every device.
+- **Admin onboarding**: invite another administrator by email. Like doctors, they set their own password through a single-use link. The last active administrator can't be demoted or suspended.
 - **Doctor onboarding**: invite a clinician by email. They set their own password through a single-use link, so admins never handle credentials. Admins can also set availability and resend invites.
 - **Appointment oversight**: filter by status, priority, risk and assignment; assign or reassign doctors; cancel visits with notifications to every party.
 - **Audit log**: a filterable, paginated history of sign-ins, account changes, admin actions and patient-record access.
@@ -180,7 +181,7 @@ Admin accounts can't be created through public sign-up. On a new database, sign 
 UPDATE "user" SET role = 'ADMIN' WHERE email = 'you@example.com';
 ```
 
-Sign out and back in. From the admin console you can then invite doctors and manage every other account, so this step is only needed once.
+Sign out and back in. From then on, invite other administrators and doctors from the admin console (**Users → Invite admin / Invite doctor**), so this SQL step is only needed once per database.
 
 ### 5. Run
 

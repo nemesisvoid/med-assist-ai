@@ -176,16 +176,18 @@ export function resetPasswordEmail({ name, url }: { name: string; url: string })
 
 export function staffInviteEmail({ name, url, role }: { name: string; url: string; role: string }): Omit<EmailPayload, 'to'> {
   const safeName = escapeHtml(name);
-  const safeRole = escapeHtml(role.toLowerCase());
+  const roleLabel = role.toUpperCase() === 'ADMIN' ? 'administrator' : role.toLowerCase();
+  const article = /^[aeiou]/i.test(roleLabel) ? 'an' : 'a';
+  const safeRole = escapeHtml(roleLabel);
   return {
     subject: `You've been invited to ${APP_NAME}`,
     html: layout({
       heading: `Welcome to ${APP_NAME}`,
-      body: `Hi ${safeName}, an administrator has created a ${safeRole} account for you. Set your password to activate your account and sign in.`,
+      body: `Hi ${safeName}, an administrator has created ${article} ${safeRole} account for you. Set your password to activate your account and sign in.`,
       ctaLabel: 'Set your password',
       ctaUrl: url,
       footnote: 'For your security this link expires in 1 hour and can only be used once. If it has expired, ask your administrator to resend the invitation.',
     }),
-    text: `Hi ${name},\n\nAn administrator created a ${role.toLowerCase()} account for you on ${APP_NAME}. Set your password:\n${url}\n\nThis link expires in 1 hour. Ask your administrator to resend it if it expires.`,
+    text: `Hi ${name},\n\nAn administrator created ${article} ${roleLabel} account for you on ${APP_NAME}. Set your password:\n${url}\n\nThis link expires in 1 hour. Ask your administrator to resend it if it expires.`,
   };
 }

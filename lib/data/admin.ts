@@ -224,7 +224,8 @@ export async function listUsers(params: {
   const items = users.map(u => ({
     ...u,
     lastSignInAt: lastSignIn.get(u.id) ?? null,
-    invitePending: u.role === 'DOCTOR' && u._count.accounts === 0,
+    // Invited staff (doctors and admins) have no login method until they set a password.
+    invitePending: (u.role === 'DOCTOR' || u.role === 'ADMIN') && u._count.accounts === 0,
   }));
 
   return { items, total, page, pageCount: pageCount(total) };

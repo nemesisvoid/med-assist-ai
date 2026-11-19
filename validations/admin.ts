@@ -25,6 +25,11 @@ export const InviteDoctorSchema = z.object({
   yearsOfExperience: z.coerce.number().int().min(0).max(70).optional(),
 });
 
+export const InviteAdminSchema = z.object({
+  name: z.string().trim().min(2, { message: 'Full name is required' }).max(100),
+  email: z.email({ message: 'Enter a valid email' }).transform(v => v.toLowerCase()),
+});
+
 export const ReassignAppointmentSchema = z.object({
   appointmentId: z.string().min(1),
   doctorId: z.string().min(1, { message: 'Choose a doctor' }),
@@ -36,3 +41,4 @@ export const CancelAppointmentSchema = z.object({
 });
 
 export type InviteDoctorInput = z.input<typeof InviteDoctorSchema>;
+export type InviteAdminInput = z.input<typeof InviteAdminSchema>;

@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { MailPlusIcon, RefreshCcwIcon, UserPlusIcon } from 'lucide-react';
 import * as z from 'zod';
 
-import { inviteDoctor, resendDoctorInvite, updateDoctorAvailability } from '@/actions/admin.action';
+import { inviteDoctor, resendStaffInvite, updateDoctorAvailability } from '@/actions/admin.action';
 import { InviteDoctorSchema } from '@/validations/admin';
 import type { DoctorAvailabilityStatus } from '@/generated/prisma/enums';
 import { ActionDialog, btnPrimary, fieldInputClass, fieldLabelClass, useAdminAction } from './action-dialog';
@@ -136,7 +136,7 @@ export const ResendInviteButton = ({ userId }: { userId: string }) => {
     <button
       type='button'
       disabled={isPending}
-      onClick={() => run(() => resendDoctorInvite(userId))}
+      onClick={() => run(() => resendStaffInvite(userId))}
       className='inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 text-xs font-bold text-amber-800 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60'>
       {isPending ? (
         <RefreshCcwIcon
