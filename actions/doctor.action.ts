@@ -4,7 +4,7 @@ import * as z from 'zod'
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { createNotification } from '@/lib/notifications';
-import { formatDoctorName, getAge } from '@/lib/utils';
+import { formatDoctorName, getAge, hasSavedClinicalNote } from '@/lib/utils';
 import { startOfDay, subDays, subMonths, startOfYear, format } from 'date-fns';
 import { clinicalNotesSchema } from '@/schema/validators';
 import { AppointmentStatus } from '@/generated/prisma/enums';
@@ -472,6 +472,11 @@ export const generatePatientSummaryNotes = async (appointmentId: string, draftDa
 
     if (!appointment) {
       return { success: false, message: 'Appointment not found.' };
+    }
+
+    // The patient summary is derived from the clinical record, so it needs saved notes to work from.
+    if (!hasSavedClinicalNote(appointment.clinicalNote)) {
+      return { success: false, message: 'Save the clinical notes first. The patient summary is written from them.' };
     }
 
     const note = appointment.clinicalNote;
