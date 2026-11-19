@@ -1,3 +1,4 @@
+import VisitModeBadge from '@/components/shared/visit-mode-badge';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -121,6 +122,7 @@ const AppointmentDetailPage = async ({ params }: { params: Promise<{ id: string 
         </div>
         <div className='flex flex-wrap items-center gap-2'>
           <AppointmentStatusBadge status={a.status} />
+          <VisitModeBadge mode={a.visitMode} />
           <PriorityBadge priority={a.priority} />
           {a.riskLevel && (
             <span className={cn('inline-flex items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold', getRiskLevelStyle(a.riskLevel))}>

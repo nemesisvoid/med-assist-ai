@@ -1,3 +1,5 @@
+import VisitModeBadge from '@/components/shared/visit-mode-badge';
+import type { VisitMode } from '@/generated/prisma/enums';
 import { isToday, isTomorrow } from 'date-fns';
 import { Button } from '../ui/button';
 import { AppointmentStatus, RiskLevel } from '@/generated/prisma/enums';
@@ -17,6 +19,7 @@ type DoctorAppointmentCardProps = {
     intakeFormId: string | undefined;
     status: AppointmentStatus;
     riskLevel: RiskLevel | null;
+    visitMode: VisitMode;
   };
 };
 
@@ -88,6 +91,7 @@ const DoctorAppointmentCard = ({ data }: DoctorAppointmentCardProps) => {
           <span className={cn('text-[10px] font-bold px-3 py-1 rounded-full border shadow-sm uppercase tracking-wider', getRiskLevelStyle(data.riskLevel))}>
             {formatRiskLabel(data.riskLevel)}
           </span>
+          <VisitModeBadge mode={data.visitMode} className='px-3 py-1 shadow-sm' />
           {/* Intake Status Alert */}
           {!data.intakeFormId && (
             <span className='inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-amber-200 bg-amber-50/50 text-amber-800 shadow-sm uppercase tracking-wider shrink-0'>

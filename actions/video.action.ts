@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { recordAudit } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
 import { getVideoAccess } from '@/lib/video-access';
-import { createVideoToken, isVideoConfigured } from '@/lib/video';
+import { createVideoToken, isVideoConfigured, liveKitUrl } from '@/lib/video';
 
 const CALL_NOTIFICATION_DEDUP_MS = 10 * 60 * 1000;
 
@@ -60,7 +60,7 @@ export const joinVideoCall = async (appointmentId: string) => {
       });
     }
 
-    return { success: true as const, token, serverUrl: process.env.NEXT_PUBLIC_LIVEKIT_URL as string };
+    return { success: true as const, token, serverUrl: liveKitUrl() };
   } catch (error) {
     console.error('[joinVideoCall]', error);
     return { success: false as const, message: 'Could not start the video call. Please try again.' };

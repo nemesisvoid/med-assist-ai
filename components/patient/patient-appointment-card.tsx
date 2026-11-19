@@ -1,5 +1,7 @@
 'use client';
 
+import VisitModeBadge from '@/components/shared/visit-mode-badge';
+import type { VisitMode } from '@/generated/prisma/enums';
 import Link from 'next/link';
 import { format, formatDistanceToNow, isFuture, isPast } from 'date-fns';
 import {
@@ -28,6 +30,7 @@ export type PatientAppointmentCardProps = {
   appointmentReason: string;
   intakeFormId?: string | null;
   status?: string | null;
+  visitMode?: VisitMode;
 };
 
 // ── Status Config ─────────────────────────────────────────────────────────────
@@ -101,6 +104,7 @@ const PatientAppointmentCard = ({
   appointmentReason,
   intakeFormId,
   status,
+  visitMode = 'IN_PERSON',
 }: PatientAppointmentCardProps) => {
   const hasIntake = !!intakeFormId;
   // The doctor asked for an update: the appointment is back to PENDING_INTAKE although an intake exists.
@@ -174,6 +178,7 @@ const PatientAppointmentCard = ({
                   {appointmentReason}
                 </p>
               )}
+              <VisitModeBadge mode={visitMode} className='mt-1' />
             </div>
           </div>
 

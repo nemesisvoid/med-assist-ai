@@ -21,13 +21,22 @@ import { useRouter } from 'next/navigation';
 import { AlertCircleIcon } from 'lucide-react';
 import type { OpeningHours } from '@/lib/clinic-hours';
 
+export type BookingClinicInfo = {
+  name: string;
+  addressLines: string[];
+  inPersonEnabled: boolean;
+  videoEnabled: boolean;
+  emergencyNumber: string | null;
+};
+
 type PatientAppointmentFormProps = {
   userId: string;
   openingHours: OpeningHours;
   timezone: string;
+  clinic: BookingClinicInfo;
 };
 
-const PatientAppointmentForm = ({ userId, openingHours, timezone }: PatientAppointmentFormProps) => {
+const PatientAppointmentForm = ({ userId, openingHours, timezone, clinic }: PatientAppointmentFormProps) => {
   const router = useRouter();
 
   const [currentStep, setCurrentStep] = useState(0);
@@ -40,6 +49,8 @@ const PatientAppointmentForm = ({ userId, openingHours, timezone }: PatientAppoi
     defaultValues: {
       appointmentReason: '',
       appointmentType: '',
+      // Pre-select when the clinic only offers one visit type.
+      visitMode: clinic.inPersonEnabled && clinic.videoEnabled ? undefined : clinic.videoEnabled ? 'VIDEO' : 'IN_PERSON',
       scheduledAt: new Date(),
       scheduledTime: '',
       // duration: '',
@@ -49,18 +60,18 @@ const PatientAppointmentForm = ({ userId, openingHours, timezone }: PatientAppoi
   });
 
   const handleNext = async () => {
-    let fieldsToValidate = [];
+    let fieldsToValidate: (keyof z.infer<typeof AppointmentFormSchema>)[] = [];
 
     switch (currentStep) {
       case 0:
-        fieldsToValidate = ['appointmentType'];
+        fieldsToValidate = ['appointmentType', 'visitMode'];
         break;
       case 1:
         if (activeConflict) return; // Block navigation if there's a conflict
         fieldsToValidate = ['doctor'];
         break;
       case 2:
-        fieldsToValidate = ['scheduleAt', 'duration'];
+        fieldsToValidate = ['scheduledAt', 'scheduledTime'];
         break;
       case 3:
         fieldsToValidate = ['appointmentReason', 'symptoms'];
@@ -151,11 +162,11 @@ const PatientAppointmentForm = ({ userId, openingHours, timezone }: PatientAppoi
       </div>
       <form onSubmit={form.handleSubmit(onSubmit, error => console.log('error', error))}>
         <div className='mx-auto'>
-          {currentStep === 0 && <VisitType form={form} />}
+          {currentStep === 0 && <VisitType form={form} clinic={clinic} />}
           {currentStep === 1 && <SelectDoctor form={form} userId={userId} onConflict={setActiveConflict} />}
           {currentStep === 2 && <DateTime form={form} openingHours={openingHours} timezone={timezone} />}
           {currentStep === 3 && <Details form={form} />}
-          {currentStep === 4 && <Confirm form={form} />}
+          {currentStep === 4 && <Confirm form={form} clinicName={clinic.name} />}
         </div>
 
         <div className='flex items-center justify-between mt-10 pt-6 border-t border-border-subtle w-1/2 mx-auto'>

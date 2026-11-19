@@ -41,6 +41,7 @@ export const AppointmentFormSchema = z.object({
   scheduledAt: z.date(),
   scheduledTime: z.string().min(1),
   appointmentType: z.string().min(1),
+  visitMode: z.enum(['IN_PERSON', 'VIDEO'], { message: 'Choose how you’d like to be seen' }),
   // duration: z.string().min(1),
   doctor: z.string().min(1),
   symptoms: z.string().optional().nullish(),

@@ -51,6 +51,12 @@ enum SeverityLevel {
   SEVERE
 }
 
+/// How the patient is seen: at the clinic, or on a video call.
+enum VisitMode {
+  IN_PERSON
+  VIDEO
+}
+
 enum ProviderType {
   DOCTOR
   THERAPIST
@@ -99,6 +105,7 @@ enum AuditAction {
   MESSAGE_DELETED
   VIDEO_CALL_JOINED
   CLINIC_SETTINGS_UPDATED
+  APPOINTMENT_VISIT_TYPE_CHANGED
   DOCTOR_AVAILABILITY_CHANGED
   APPOINTMENT_REASSIGNED
   APPOINTMENT_CANCELLED
@@ -221,6 +228,9 @@ model Appointment {
   durationMinutes Int?
 
   status AppointmentStatus @default(PENDING_INTAKE)
+
+  /// Chosen by the patient when booking; the clinician can switch it (e.g. high-risk video → in person).
+  visitMode VisitMode @default(IN_PERSON)
 
   priority      AppointmentPriority @default(MEDIUM)
   severityLevel SeverityLevel?

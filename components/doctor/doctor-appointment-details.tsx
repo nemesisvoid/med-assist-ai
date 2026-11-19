@@ -32,8 +32,11 @@ import {
   markAppointmentCompleteAction,
   sendPatientNotificationAction,
   requestUpdatedIntakeAction,
+  changeVisitTypeAction,
   applySoapDraftAction,
 } from '@/actions/doctor.action';
+import VisitModeBadge from '@/components/shared/visit-mode-badge';
+import { isHighRiskVideoVisit } from '@/lib/visit-mode';
 import { cn, formatEnums, formatRiskLabel, hasSavedClinicalNote, getAppointmentStatusStyle, getPriorityStyle, getRiskLevelStyle, formatDoctorName } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
@@ -214,6 +217,23 @@ export default function DoctorAppointmentDetails({ appointment: initialAppointme
     });
   };
 
+  // Switching notifies the patient, so it takes a second click to confirm.
+  const [confirmVisitSwitch, setConfirmVisitSwitch] = useState(false);
+  const isOpenAppointment = !isCompleted && appointment.status !== 'CANCELLED';
+  const otherVisitMode = appointment.visitMode === 'VIDEO' ? 'IN_PERSON' : 'VIDEO';
+  const handleChangeVisitType = (mode: 'IN_PERSON' | 'VIDEO') => {
+    startTransition(async () => {
+      const res = await changeVisitTypeAction(appointment.id, mode);
+      setConfirmVisitSwitch(false);
+      if (res.success) {
+        toast.success(res.message);
+        await refreshAppointmentState();
+      } else {
+        toast.error(res.message);
+      }
+    });
+  };
+
   const handleRequestIntake = () => {
     startTransition(async () => {
       const res = await requestUpdatedIntakeAction(appointment.id);
@@ -342,12 +362,32 @@ export default function DoctorAppointmentDetails({ appointment: initialAppointme
                       )}>
                       {formatRiskLabel(appointment.riskLevel)}
                     </Badge>
+                    <VisitModeBadge mode={appointment.visitMode} className='h-4.5 py-0 shadow-sm' />
                   </div>
                 </div>
               </div>
             </div>
 
             <div className='flex flex-wrap items-center gap-2 w-full md:w-auto'>
+              {isOpenAppointment && (
+                <Button
+                  type='button'
+                  variant='outline'
+                  size='sm'
+                  disabled={isPending}
+                  onClick={() => (confirmVisitSwitch ? handleChangeVisitType(otherVisitMode) : setConfirmVisitSwitch(true))}
+                  onBlur={() => setConfirmVisitSwitch(false)}
+                  className={cn(
+                    'flex-1 md:flex-none cursor-pointer shadow-sm',
+                    confirmVisitSwitch ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-slate-200 text-slate-700',
+                  )}>
+                  {confirmVisitSwitch
+                    ? `Confirm: notify patient`
+                    : otherVisitMode === 'IN_PERSON'
+                      ? 'Switch to in person'
+                      : 'Switch to video'}
+                </Button>
+              )}
               {!isCompleted && appointment.status !== 'CANCELLED' && (
                 <Link
                   href={`/call/${appointment.id}`}
@@ -394,6 +434,27 @@ export default function DoctorAppointmentDetails({ appointment: initialAppointme
               </Button>
             </div>
           </div>
+
+          {/* HIGH-RISK VIDEO VISIT */}
+          {isOpenAppointment && isHighRiskVideoVisit(appointment) && (
+            <div role='alert' className='flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 px-5 py-3.5 sm:flex-row sm:items-center'>
+              <AlertTriangle className='size-5 shrink-0 text-amber-600' aria-hidden />
+              <div className='flex-1'>
+                <p className='text-sm font-bold text-amber-900'>Consider seeing this patient in person</p>
+                <p className='text-xs text-amber-800'>
+                  This is booked as a video consultation, but AI triage rated it {appointment.priority.toLowerCase()} priority. Some conditions need a physical examination.
+                </p>
+              </div>
+              <Button
+                type='button'
+                size='sm'
+                disabled={isPending}
+                onClick={() => handleChangeVisitType('IN_PERSON')}
+                className='shrink-0 cursor-pointer bg-amber-600 text-white hover:bg-amber-700'>
+                Switch to in person
+              </Button>
+            </div>
+          )}
 
           {/* COMPLETED BANNER */}
           {isCompleted && (

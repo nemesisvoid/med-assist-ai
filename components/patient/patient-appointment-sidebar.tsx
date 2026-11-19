@@ -2,20 +2,32 @@
 
 import { formatDoctorName } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
-import { Calendar, User, ShieldCheck, ArrowRight, Video } from 'lucide-react';
+import { Calendar, User, ShieldCheck, ArrowRight, Video, MapPin, ExternalLink, Phone } from 'lucide-react';
+import VisitModeBadge from '@/components/shared/visit-mode-badge';
+import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Appointment } from './patient-appointment-types';
 
+export type ClinicLocation = {
+  name: string;
+  addressLines: string[];
+  mapUrl: string | null;
+  arrivalInstructions: string | null;
+  phone: string | null;
+};
+
 type Props = {
   appointment: Appointment;
+  clinic: ClinicLocation;
   isCompleted: boolean;
   isCancelled: boolean;
 };
 
-export default function PatientAppointmentSidebar({ appointment, isCompleted, isCancelled }: Props) {
+export default function PatientAppointmentSidebar({ appointment, clinic, isCompleted, isCancelled }: Props) {
+  const isVideo = appointment.visitMode === 'VIDEO';
   const router = useRouter();
   const doctor = appointment.doctor;
   const doctorProfile = doctor?.doctorProfile;
@@ -59,13 +71,66 @@ export default function PatientAppointmentSidebar({ appointment, isCompleted, is
               <p className='text-xs font-medium text-slate-400'>Doctor not yet assigned</p>
             </div>
           )}
+          {/* Video stays available for every appointment; it's the main action for video consultations. */}
           {doctor && !isCompleted && !isCancelled && (
             <Link
               href={`/call/${appointment.id}`}
-              className='mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2'>
+              className={cn(
+                'mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2',
+                isVideo
+                  ? 'bg-emerald-600 text-white shadow-sm hover:bg-emerald-700'
+                  : 'border border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50',
+              )}>
               <Video className='size-4' aria-hidden />
               Join video call
             </Link>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── WHERE TO GO (in-person visits) ───────────────────────── */}
+      <Card className='shadow-sm border-slate-100 overflow-hidden'>
+        <CardHeader className='bg-slate-50/60 border-b border-slate-100 px-4 py-3.5'>
+          <div className='flex items-center justify-between gap-2'>
+            <div className='flex items-center gap-2'>
+              {isVideo ? <Video className='size-4 text-emerald-600' /> : <MapPin className='size-4 text-blue-600' />}
+              <span className='text-xs font-bold text-slate-700 uppercase tracking-wider'>{isVideo ? 'How to join' : 'Where to go'}</span>
+            </div>
+            <VisitModeBadge mode={appointment.visitMode} />
+          </div>
+        </CardHeader>
+        <CardContent className='p-4 text-sm text-slate-700'>
+          {isVideo ? (
+            <p className='text-xs leading-relaxed text-slate-600'>
+              This is a video consultation. At your appointment time, use <span className='font-semibold'>Join video call</span> above.
+              You’ll check your camera and microphone before joining.
+            </p>
+          ) : (
+            <div className='space-y-2'>
+              <p className='font-semibold text-slate-800'>{clinic.name}</p>
+              {clinic.addressLines.length > 0 ? (
+                <address className='not-italic text-xs leading-relaxed text-slate-600'>
+                  {clinic.addressLines.map(line => (
+                    <span key={line} className='block'>{line}</span>
+                  ))}
+                </address>
+              ) : (
+                <p className='text-xs text-slate-500'>The clinic will confirm the address with you.</p>
+              )}
+              {clinic.arrivalInstructions && <p className='rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600'>{clinic.arrivalInstructions}</p>}
+              <div className='flex flex-wrap gap-3 pt-1'>
+                {clinic.mapUrl && (
+                  <a href={clinic.mapUrl} target='_blank' rel='noopener noreferrer' className='inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:underline'>
+                    Open map <ExternalLink className='size-3' aria-hidden />
+                  </a>
+                )}
+                {clinic.phone && (
+                  <a href={`tel:${clinic.phone.replace(/\s/g, '')}`} className='inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:underline'>
+                    <Phone className='size-3' aria-hidden /> {clinic.phone}
+                  </a>
+                )}
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>

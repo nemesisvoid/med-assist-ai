@@ -12,12 +12,14 @@ import PatientAppointmentSidebar from './patient-appointment-sidebar';
 
 // Shared types
 import { Appointment } from './patient-appointment-types';
+import type { ClinicLocation } from './patient-appointment-sidebar';
 
 type Props = {
   appointment: Appointment;
+  clinic: ClinicLocation;
 };
 
-export default function PatientAppointmentDetails({ appointment }: Props) {
+export default function PatientAppointmentDetails({ appointment, clinic }: Props) {
   const isCompleted = appointment.status === 'COMPLETED';
   const isCancelled = appointment.status === 'CANCELLED';
 
@@ -115,6 +117,7 @@ export default function PatientAppointmentDetails({ appointment }: Props) {
         {/* Sidebar — care team, details, follow-up */}
         <PatientAppointmentSidebar
           appointment={appointment}
+          clinic={clinic}
           isCompleted={isCompleted}
           isCancelled={isCancelled}
         />

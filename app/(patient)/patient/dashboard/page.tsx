@@ -110,6 +110,7 @@ const PatientDashboardPage = async () => {
                     appointmentReason={nextAppointment.appointmentReason}
                     intakeFormId={nextAppointment.intakeForm?.id ?? null}
                     status={nextAppointment.status ?? null}
+                    visitMode={nextAppointment.visitMode}
                   />
                 ) : (
                   <div className='flex flex-col items-center justify-center py-12 text-center'>

@@ -20,6 +20,7 @@ const PatientAppointmentPage = async () => {
     intakeFormId: item.intakeForm?.id ?? null,
     doctor: item.doctor?.name ?? null,
     status: item.status ?? null,
+    visitMode: item.visitMode,
   }));
 
   return (

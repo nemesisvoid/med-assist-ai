@@ -30,12 +30,14 @@ MedAssist AI is a telehealth platform that connects patients with doctors and cu
 - **Appointment journey tracker** from intake through to a completed visit.
 - **Visit summaries** written for patients, plus diagnosis, treatment plan and prescriptions.
 - **Notifications** and **real-time messaging** with the assigned doctor, including **image and file attachments** (photos, PDFs, Word and text files up to 10 MB).
+- **In person or video**: patients choose how they'd like to be seen when booking (only the visit types the clinic offers). In-person appointments show the clinic's address, map and arrival instructions; video consultations put "Join video call" first.
 - **Video consultations** with their clinician from the appointment page or chat, with a camera and microphone check before joining.
 
 ### Clinicians (doctors and therapists)
 
 Clinicians are either **doctors** (shown as "Dr. Name") or **therapists** (shown with their credentials, e.g. "Jane Doe, LMFT"). Patients can filter by type when booking. For therapy sessions, the AI triage, SOAP draft and patient summary use mental-health-specific guidance (self-harm and safety screening, therapy progress notes, "your therapist" wording); everything else works the same for both.
 
+- **Visit type**: clinicians can switch an appointment between in person and video (the patient is notified). If AI triage rates a video booking as high priority, the clinician is alerted to consider seeing the patient in person.
 - **Clinical dashboard** with the next appointment, a calendar, an appointment volume chart and recent patients.
 - **AI workflow insights** on every appointment: suggested risk level, priority, a triage summary and recommendations.
 - **AI SOAP drafts** (Subjective, Objective, Assessment, Plan) that can be applied, edited and saved as the clinical note.
@@ -230,7 +232,7 @@ All variables are documented in [`.env.example`](.env.example).
 | `SOCKET_AUTH_SECRET` | For chat | Signs chat connection tokens. Must be the **same value** on the Next.js app and the socket server |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | For chat attachments | Private Cloudflare R2 bucket for files shared in chat. App only; see [Deployment](#deployment) |
 | `CRON_SECRET` | For chat attachments | Authorises the daily job that deletes uploads that were never sent |
-| `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `NEXT_PUBLIC_LIVEKIT_URL` | For video calls | LiveKit Cloud project keys and `wss://` URL. App only |
+| `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_URL` | For video calls | LiveKit Cloud project keys and `wss://` URL (`NEXT_PUBLIC_LIVEKIT_URL` is also accepted). App only |
 | `EMAIL_TRANSPORT` | Local testing only | Set to `console` to print emails even in a production build. Never set this on a real deployment |
 
 ---
@@ -317,7 +319,7 @@ The app targets **Vercel + Neon**:
       ```
    4. Set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_BUCKET` on the app (Vercel) and redeploy.
    5. Set `CRON_SECRET` on Vercel. `vercel.json` schedules a daily job that deletes uploads never sent within 24 hours; Vercel authenticates it with this secret.
-7. Set up video calls (optional): create a project at [LiveKit Cloud](https://cloud.livekit.io), then under **Settings → Keys** create an API key. Set `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` and `NEXT_PUBLIC_LIVEKIT_URL` (the project's `wss://…livekit.cloud` URL) on Vercel and redeploy. Each appointment gets its own room; passes are issued only to that appointment's patient and assigned clinician, last one hour, and every join is audit-logged. Calls are not recorded.
+7. Set up video calls (optional): create a project at [LiveKit Cloud](https://cloud.livekit.io), then under **Settings → Keys** create an API key. Set `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` and `LIVEKIT_URL` (the project's `wss://…livekit.cloud` URL) on Vercel and redeploy. Each appointment gets its own room; passes are issued only to that appointment's patient and assigned clinician, last one hour, and every join is audit-logged. Calls are not recorded.
 
 ---
 
