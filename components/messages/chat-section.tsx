@@ -48,12 +48,14 @@ type ChatSectionProps = {
     selectedConversation: ConversationData | null;
     userId: string;
     userRole?: string;
+    /** From clinic settings; null shows a generic "local emergency number" message. */
+    emergencyNumber?: string | null;
 };
 
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
-const ChatSection = ({ selectedConversationId, selectedConversation, userId, userRole }: ChatSectionProps) => {
+const ChatSection = ({ selectedConversationId, selectedConversation, userId, userRole, emergencyNumber = null }: ChatSectionProps) => {
     const [input, setInput] = useState('');
     const [localTyping, setLocalTyping] = useState(false);
     const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -313,7 +315,9 @@ const ChatSection = ({ selectedConversationId, selectedConversation, userId, use
                             <line x1='12' y1='17' x2='12.01' y2='17' />
                         </svg>
                         <p className='text-[11px] text-amber-700 font-medium'>
-                            For medical emergencies, please call 911 or visit your nearest emergency room immediately.
+                            {emergencyNumber
+                                ? `For medical emergencies, call ${emergencyNumber} or go to your nearest emergency department immediately.`
+                                : 'For medical emergencies, call your local emergency number or go to your nearest emergency department immediately.'}
                         </p>
                     </div>
 

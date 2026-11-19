@@ -1,3 +1,4 @@
+import { getClinicSettings } from '@/lib/clinic';
 import { getDoctorMessages } from "@/actions/message.action";
 import ChatRoom from "@/components/messages/chat-room";
 import { getLoggedInUser } from "@/lib/get-user";
@@ -9,6 +10,7 @@ const DoctorMessagesPage = async () => {
     if (!loggedInUser || loggedInUser.user.role !== 'DOCTOR') return redirect('/');
 
     const { data: conversations } = await getDoctorMessages();
+    const clinic = await getClinicSettings();
 
     const data = conversations?.map((c: any) => ({
         id: c.id,
@@ -54,7 +56,7 @@ const DoctorMessagesPage = async () => {
 
     return (
         <div className='px-4 sm:px-6 py-4'>
-            <ChatRoom data={data || []} userId={loggedInUser.user.id} userRole="DOCTOR" />
+            <ChatRoom data={data || []} userId={loggedInUser.user.id} userRole="DOCTOR" emergencyNumber={clinic.emergencyNumber} />
         </div>
     );
 };

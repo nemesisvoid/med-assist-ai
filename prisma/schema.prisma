@@ -98,6 +98,7 @@ enum AuditAction {
   ATTACHMENT_VIEWED
   MESSAGE_DELETED
   VIDEO_CALL_JOINED
+  CLINIC_SETTINGS_UPDATED
   DOCTOR_AVAILABILITY_CHANGED
   APPOINTMENT_REASSIGNED
   APPOINTMENT_CANCELLED
@@ -432,6 +433,42 @@ model MessageAttachment {
   @@index([conversationId])
   @@index([messageId])
   @@map("message_attachment")
+}
+
+/// The clinic's own details and policies, edited by admins in Clinic settings.
+/// A single row (id = "default"); read through lib/clinic.ts, which falls back
+/// to sensible defaults before an admin has saved anything.
+model ClinicSettings {
+  id String @id @default("default")
+
+  name                String  @default("MedAssist Clinic")
+  phone               String?
+  email               String?
+  addressLine1        String?
+  addressLine2        String?
+  city                String?
+  state               String?
+  postalCode          String?
+  country             String?
+  mapUrl              String?
+  /// Shown to patients on in-person appointments (parking, entrance, what to bring).
+  arrivalInstructions String?
+
+  /// IANA timezone that appointment times and opening hours are expressed in.
+  timezone     String @default("Africa/Lagos")
+  /// Weekly opening hours: { mon: { open: "09:00", close: "17:00" } | null, ... }
+  openingHours Json
+
+  inPersonEnabled Boolean @default(true)
+  videoEnabled    Boolean @default(true)
+
+  /// Shown to patients for emergencies. Null shows a generic "local emergency number" message.
+  emergencyNumber String?
+
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("clinic_settings")
 }
 
 model Notification {

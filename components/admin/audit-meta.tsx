@@ -3,6 +3,7 @@ import {
   CalendarXIcon,
   EyeIcon,
   VideoIcon,
+  Building2Icon,
   PaperclipIcon,
   Trash2Icon,
   KeyRoundIcon,
@@ -42,6 +43,7 @@ export const AUDIT_ACTION_META: Record<AuditAction, { label: string; icon: Lucid
   ATTACHMENT_VIEWED: { label: 'Attachment viewed', icon: PaperclipIcon, tone: 'neutral' },
   MESSAGE_DELETED: { label: 'Message deleted', icon: Trash2Icon, tone: 'warning' },
   VIDEO_CALL_JOINED: { label: 'Video call joined', icon: VideoIcon, tone: 'neutral' },
+  CLINIC_SETTINGS_UPDATED: { label: 'Clinic settings updated', icon: Building2Icon, tone: 'info' },
 };
 
 const toneStyles: Record<Tone, string> = {

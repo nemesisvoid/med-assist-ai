@@ -37,11 +37,12 @@ interface ChatRoomProps {
     data: ConversationItem[];
     userId: string;
     userRole: string;
+    emergencyNumber?: string | null;
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
-const ChatRoom = ({ data, userId, userRole }: ChatRoomProps) => {
+const ChatRoom = ({ data, userId, userRole, emergencyNumber = null }: ChatRoomProps) => {
     const [conversations, setConversations] = useState<ConversationItem[]>(data);
     const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
 
@@ -90,6 +91,7 @@ const ChatRoom = ({ data, userId, userRole }: ChatRoomProps) => {
                 selectedConversation={selectedConversation as any}
                 userId={userId}
                 userRole={userRole}
+                emergencyNumber={emergencyNumber}
             />
         </div>
     );

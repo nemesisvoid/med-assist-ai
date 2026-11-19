@@ -16,6 +16,8 @@ import { createNotification } from '@/lib/notifications';
 import { after } from 'next/server';
 import { runTriage } from '@/lib/triage';
 import { ANY_AVAILABLE_CLINICIAN } from '@/constants/booking';
+import { getClinicSettings } from '@/lib/clinic';
+import { bookingDateKey, isSlotWithinHours, todayInTimezone, weekdayOf } from '@/lib/clinic-hours';
 import { authFailure, getSessionWithRole, requireAppointmentPatient, requireRole } from '@/lib/authz';
 
 export const getPatientProfile = async () => {
@@ -69,6 +71,15 @@ export const createAppointment = async (formData: z.infer<typeof AppointmentForm
     const validatedData = AppointmentFormSchema.safeParse(formData);
     if (!validatedData.success) return { success: false, message: 'Please check the form and try again.' };
     const { data } = validatedData;
+
+    // Enforced here, not only in the booking screen: within opening hours, not in the past.
+    const clinic = await getClinicSettings();
+    if (bookingDateKey(data.scheduledAt) < todayInTimezone(clinic.timezone)) {
+      return { success: false, message: 'Please choose a date from today onwards.' };
+    }
+    if (!isSlotWithinHours(clinic.openingHours[weekdayOf(data.scheduledAt)], data.scheduledTime)) {
+      return { success: false, message: 'The clinic is closed at that time. Please choose another time.' };
+    }
 
     // "Any available" creates an unassigned appointment that an administrator assigns.
     const anyAvailable = data.doctor === ANY_AVAILABLE_CLINICIAN;

@@ -49,6 +49,7 @@ Clinicians are either **doctors** (shown as "Dr. Name") or **therapists** (shown
 - **Clinician onboarding**: invite a doctor or therapist by email. They set their own password through a single-use link, so admins never handle credentials. Admins can also set availability and resend invites.
 - **Appointment oversight**: filter by status, priority, risk and assignment; assign or reassign doctors; cancel visits with notifications to every party.
 - **Audit log**: a filterable, paginated history of sign-ins, account changes, admin actions and patient-record access.
+- **Clinic settings**: the clinic's name, contact details and address (with map link and arrival instructions for in-person visits), opening hours and timezone (booking only offers slots within opening hours, enforced on the server too), which visit types are offered, and the emergency number shown to patients. Every change is audit-logged.
 
 ### Authentication
 - Email and password sign-up with **email verification** (auto sign-in after verifying, resend with a cooldown).
