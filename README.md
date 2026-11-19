@@ -94,7 +94,7 @@ MedAssist AI is a telehealth platform that connects patients with doctors and cu
 
 ![Sign in](docs/screenshots/auth-login.png)
 
-> Screenshots use seeded demo data. No real patient information is shown.
+> Screenshots use test data. No real patient information is shown.
 
 ---
 
@@ -166,16 +166,23 @@ cp .env.example .env
 
 Fill in at least `DATABASE_URL` and `BETTER_AUTH_SECRET` (generate one with `openssl rand -base64 32`). See [Environment variables](#environment-variables) for the rest.
 
-### 3. Create the schema and seed data
+### 3. Create the database schema
 
 ```bash
 npx prisma migrate deploy
-npx prisma db seed
 ```
 
-The seed creates 10 demo doctors, using `SEED_DOCTOR_PASSWORD` (default `password1234`). If `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` are set, it also creates your first **administrator**. Admin accounts can't be created through public sign-up.
+### 4. Create the first administrator
 
-### 4. Run
+Admin accounts can't be created through public sign-up. On a new database, sign up through the app with the account you want to use, verify its email, then promote it once with SQL (for example in the Neon SQL editor):
+
+```sql
+UPDATE "user" SET role = 'ADMIN' WHERE email = 'you@example.com';
+```
+
+Sign out and back in. From the admin console you can then invite doctors and manage every other account, so this step is only needed once.
+
+### 5. Run
 
 ```bash
 npm run dev      # Next.js app  → http://localhost:3000
@@ -193,7 +200,6 @@ In development, verification, password-reset and invite emails are **printed to 
 | `npm run build` | Generates the Prisma client and builds for production |
 | `npm run start` | Serves the production build |
 | `npm run lint` | Runs ESLint |
-| `npx prisma db seed` | Seeds demo doctors and, optionally, the first admin |
 
 ---
 
@@ -214,9 +220,7 @@ All variables are documented in [`.env.example`](.env.example).
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional | Enables "Continue with Google". Redirect URI: `{BETTER_AUTH_URL}/api/auth/callback/google` |
 | `NEXT_PUBLIC_SOCKET_URL`, `SOCKET_PORT` | For chat | Where the Socket.IO server listens (hosts like Render set `PORT`, which takes precedence) |
 | `SOCKET_AUTH_SECRET` | For chat | Signs chat connection tokens. Must be the **same value** on the Next.js app and the socket server |
-| `SEED_DOCTOR_PASSWORD` | Seeding | Password for demo doctor accounts |
-| `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_ADMIN_NAME` | Seeding | Creates the first administrator |
-| `EMAIL_TRANSPORT` | Local demos only | Set to `console` to print emails even in a production build. Never set this on a real deployment |
+| `EMAIL_TRANSPORT` | Local testing only | Set to `console` to print emails even in a production build. Never set this on a real deployment |
 
 ---
 
@@ -269,7 +273,7 @@ lib/
   data/admin.ts         admin read queries (not client-callable)
   email.ts              email transport and templates
 prisma/
-  schema.prisma, migrations/, seed.ts, manual/
+  schema.prisma, migrations/, manual/
 proxy.ts                route protection and role-based redirects
 routes.ts               route groups and post-login redirect helpers
 server.ts               Socket.IO server
