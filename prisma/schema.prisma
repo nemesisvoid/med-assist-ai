@@ -95,6 +95,8 @@ enum AuditAction {
   DOCTOR_INVITE_RESENT
   ADMIN_INVITED
   ADMIN_INVITE_RESENT
+  ATTACHMENT_VIEWED
+  MESSAGE_DELETED
   DOCTOR_AVAILABILITY_CHANGED
   APPOINTMENT_REASSIGNED
   APPOINTMENT_CANCELLED
@@ -392,6 +394,8 @@ model Message {
   user          User?         @relation(fields: [userId], references: [id])
   conversation  Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   messageStatus MessageStatus @default(SENT)
+  /// Set when the sender deleted the message within the allowed window; content and files are removed.
+  deletedAt     DateTime?
 
   attachments MessageAttachment[]
 

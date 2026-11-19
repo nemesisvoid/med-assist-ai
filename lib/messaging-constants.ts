@@ -3,6 +3,9 @@
  * NOT a 'use server' file so plain exports are allowed.
  */
 
+/** How long after sending a sender can still delete their own message (e.g. the wrong photo). After that it's part of the record. */
+export const MESSAGE_DELETE_WINDOW_MS = 15 * 60 * 1000;
+
 /** Days a conversation stays open after its appointment is completed, then it becomes read-only. */
 export const CHAT_LOCK_DAYS = 5;
 

@@ -2,6 +2,8 @@ import {
   BanIcon,
   CalendarXIcon,
   EyeIcon,
+  PaperclipIcon,
+  Trash2Icon,
   KeyRoundIcon,
   LogInIcon,
   LogOutIcon,
@@ -36,6 +38,8 @@ export const AUDIT_ACTION_META: Record<AuditAction, { label: string; icon: Lucid
   APPOINTMENT_REASSIGNED: { label: 'Appointment reassigned', icon: ShuffleIcon, tone: 'info' },
   APPOINTMENT_CANCELLED: { label: 'Appointment cancelled', icon: CalendarXIcon, tone: 'danger' },
   PATIENT_RECORD_VIEWED: { label: 'Patient record viewed', icon: EyeIcon, tone: 'neutral' },
+  ATTACHMENT_VIEWED: { label: 'Attachment viewed', icon: PaperclipIcon, tone: 'neutral' },
+  MESSAGE_DELETED: { label: 'Message deleted', icon: Trash2Icon, tone: 'warning' },
 };
 
 const toneStyles: Record<Tone, string> = {

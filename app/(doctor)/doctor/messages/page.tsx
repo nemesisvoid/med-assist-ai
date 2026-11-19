@@ -20,7 +20,7 @@ const DoctorMessagesPage = async () => {
         appointmentType: c.activeAppointment?.appointmentType,
         appointmentStatus: c.activeAppointment?.status,
         unread: c.messages.filter((m: any) => !m.isRead && m.senderId !== loggedInUser.user.id).length,
-        lastMessage: c.messages[c.messages.length - 1]?.content || (c.messages[c.messages.length - 1]?.attachments?.length ? 'Sent an attachment' : undefined),
+        lastMessage: c.messages[c.messages.length - 1]?.deletedAt ? 'Message deleted' : c.messages[c.messages.length - 1]?.content || (c.messages[c.messages.length - 1]?.attachments?.length ? 'Sent an attachment' : undefined),
         // Active appointment for the chat section banner & lock logic
         activeAppointment: c.activeAppointment ? {
             id: c.activeAppointment.id,
@@ -48,6 +48,7 @@ const DoctorMessagesPage = async () => {
             isRead: m.isRead,
             messageStatus: m.messageStatus ?? undefined,
             attachments: m.attachments ?? [],
+            deletedAt: m.deletedAt ? new Date(m.deletedAt).toISOString() : null,
         })),
     }));
 
