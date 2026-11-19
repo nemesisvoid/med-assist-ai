@@ -3,6 +3,9 @@
  * NOT a 'use server' file so plain exports are allowed.
  */
 
+/** Days a conversation stays open after its appointment is completed, then it becomes read-only. */
+export const CHAT_LOCK_DAYS = 5;
+
 /** Appointment statuses that allow sending messages. */
 export const MESSAGING_ALLOWED_STATUSES = [
     'PENDING_INTAKE',

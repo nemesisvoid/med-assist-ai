@@ -31,7 +31,7 @@ type ConversationData = {
     partnerId?: string;
     /** The appointment currently open for messaging */
     activeAppointment?: AppointmentInfo | null;
-    /** ISO date string — chat becomes read-only after this (7 days after COMPLETED) */
+    /** ISO date string — chat becomes read-only after this (CHAT_LOCK_DAYS after COMPLETED) */
     chatLocksAt?: string | null;
     messages?: SocketMessage[];
 };
@@ -59,7 +59,7 @@ const ChatSection = ({ selectedConversationId, selectedConversation, userId, use
     const activeAppt = selectedConversation?.activeAppointment;
     const chatLocksAt = selectedConversation?.chatLocksAt ?? null;
 
-    // Grace period: chatLocksAt is set when appointment is completed; allow read-only view within 7 days
+    // Grace period: chatLocksAt is set when the appointment is completed (CHAT_LOCK_DAYS later)
     const daysUntilLock = chatLocksAt ? differenceInDays(new Date(chatLocksAt), new Date()) : null;
     const isInGracePeriod = daysUntilLock !== null && daysUntilLock >= 0;
 

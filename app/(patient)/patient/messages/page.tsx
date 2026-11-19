@@ -29,7 +29,7 @@ const PatientMessagePage = async () => {
             appointmentType: c.activeAppointment.appointmentType,
             scheduledAt: c.activeAppointment.scheduledAt.toISOString(),
         } : null,
-        // Grace-period lock date (7 days after appointment was completed)
+        // Grace-period lock date (CHAT_LOCK_DAYS after the appointment was completed)
         chatLocksAt: c.chatLocksAt ? new Date(c.chatLocksAt).toISOString() : null,
         messages: c.messages.map((m: any) => ({
             id: m.id,

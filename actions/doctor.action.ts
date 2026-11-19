@@ -9,6 +9,7 @@ import { startOfDay, subDays, subMonths, startOfYear, format } from 'date-fns';
 import { clinicalNotesSchema } from '@/schema/validators';
 import { AppointmentStatus } from '@/generated/prisma/enums';
 import { recordAudit } from '@/lib/audit';
+import { CHAT_LOCK_DAYS } from '@/lib/messaging-constants';
 import { aiFailure, generateJson, generateText } from '@/lib/ai';
 import { runTriage } from '@/lib/triage';
 import { authFailure, getSessionWithRole, requireAssignedDoctor, requireRole } from '@/lib/authz';
@@ -600,9 +601,9 @@ export const markAppointmentCompleteAction = async (appointmentId: string) => {
       include: { patient: { select: { name: true } } },
     });
 
-    // ── Chat grace-period: lock chat 7 days after completion ──────────────────
+    // ── Chat grace period: the conversation locks CHAT_LOCK_DAYS after completion ──
     const chatLocksAt = new Date();
-    chatLocksAt.setDate(chatLocksAt.getDate() + 5);
+    chatLocksAt.setDate(chatLocksAt.getDate() + CHAT_LOCK_DAYS);
 
     const conversation = await prisma.conversation.findFirst({
       where: { patientId: appointment.patientId, doctorId: appointment.doctorId ?? doctorId },
@@ -611,7 +612,7 @@ export const markAppointmentCompleteAction = async (appointmentId: string) => {
 
     if (conversation) {
       // Keep the active appointment linked so the chat section can read its status;
-      // chatLocksAt is the real gate that locks the conversation after 5 days.
+      // chatLocksAt is the real gate that locks the conversation after CHAT_LOCK_DAYS days.
       await prisma.conversation.update({
         where: { id: conversation.id },
         data: { chatLocksAt },
@@ -624,7 +625,7 @@ export const markAppointmentCompleteAction = async (appointmentId: string) => {
           appointmentId,
           senderId: doctorId,
           receiverId: conversation.patientId,
-          content: `This appointment has been marked as complete. Chat history for this appointment will be locked on ${chatLocksAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}. You have 5 days to review your messages.`,
+          content: `This appointment has been marked as complete. Chat history for this appointment will be locked on ${chatLocksAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}. You have ${CHAT_LOCK_DAYS} days to review your messages.`,
           messageStatus: 'SYSTEM',
         },
       });
