@@ -104,6 +104,16 @@ async function getPartnerIds(userId: string): Promise<string[]> {
   return [...new Set(conversations.map(c => (c.patientId === userId ? c.doctorId : c.patientId)))];
 }
 
+/** "Dr. Name" for doctors, "Name, LMFT" for therapists (mirrors formatDoctorName in lib/utils). */
+function clinicianDisplayName(doctor: { name: string; doctorProfile: { providerType: string; credentials: string | null } | null }) {
+  const name = doctor.name.trim();
+  if (doctor.doctorProfile?.providerType === 'THERAPIST') {
+    const clean = name.replace(/^dr\.?\s+/i, '');
+    return doctor.doctorProfile.credentials?.trim() ? `${clean}, ${doctor.doctorProfile.credentials.trim()}` : clean;
+  }
+  return /^dr\.?\s/i.test(name) ? name : `Dr. ${name}`;
+}
+
 // ─── Online presence tracking ────────────────────────────────────────────────────
 // userId → Set<socketId>  (multiple tabs = multiple sockets, same user)
 
@@ -258,6 +268,39 @@ io.on('connection', rawSocket => {
       console.error('[socket] Failed to save message:', err);
       socket.emit('error', { message: 'Failed to send message. Please try again.' });
     }
+  });
+
+  // ── Video call started: ring the other participant ───────────────────────────
+  // Sent by the call page once connected. The server checks the caller is on this
+  // open appointment and only notifies the other participant, by their own room.
+  socket.on('call_started', async ({ appointmentId }: { appointmentId?: unknown } = {}) => {
+    if (!isString(appointmentId)) return;
+    const appointment = await prisma.appointment
+      .findFirst({
+        where: {
+          id: appointmentId,
+          OR: [{ patientId: userId }, { doctorId: userId }],
+          status: { notIn: ['CANCELLED', 'COMPLETED'] },
+          doctorId: { not: null },
+        },
+        select: {
+          id: true,
+          appointmentType: true,
+          patient: { select: { id: true, name: true } },
+          doctor: { select: { id: true, name: true, doctorProfile: { select: { providerType: true, credentials: true } } } },
+        },
+      })
+      .catch(() => null);
+    if (!appointment?.doctor) return;
+
+    const callerIsClinician = appointment.doctor.id === userId;
+    const partnerId = callerIsClinician ? appointment.patient.id : appointment.doctor.id;
+    const callerName = callerIsClinician ? clinicianDisplayName(appointment.doctor) : appointment.patient.name;
+    io.to(userRoom(partnerId)).emit('incoming_call', {
+      appointmentId: appointment.id,
+      appointmentType: appointment.appointmentType,
+      callerName,
+    });
   });
 
   // ── A message was deleted by its sender (through the app's deleteMessage action) ──

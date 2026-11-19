@@ -2,7 +2,8 @@
 
 import { formatDoctorName } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
-import { Calendar, User, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Calendar, User, ShieldCheck, ArrowRight, Video } from 'lucide-react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -57,6 +58,14 @@ export default function PatientAppointmentSidebar({ appointment, isCompleted, is
               </div>
               <p className='text-xs font-medium text-slate-400'>Doctor not yet assigned</p>
             </div>
+          )}
+          {doctor && !isCompleted && !isCancelled && (
+            <Link
+              href={`/call/${appointment.id}`}
+              className='mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2'>
+              <Video className='size-4' aria-hidden />
+              Join video call
+            </Link>
           )}
         </CardContent>
       </Card>

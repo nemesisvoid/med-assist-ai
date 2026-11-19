@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -21,6 +22,7 @@ import {
   ClipboardList,
   AlertTriangle,
   Lock,
+  Video,
 } from 'lucide-react';
 import {
   getDoctorAppointmentById,
@@ -346,6 +348,14 @@ export default function DoctorAppointmentDetails({ appointment: initialAppointme
             </div>
 
             <div className='flex flex-wrap items-center gap-2 w-full md:w-auto'>
+              {!isCompleted && appointment.status !== 'CANCELLED' && (
+                <Link
+                  href={`/call/${appointment.id}`}
+                  className='inline-flex h-8 flex-1 md:flex-none items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/40 px-3 text-sm font-medium text-emerald-700 shadow-sm transition-colors hover:bg-emerald-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500'>
+                  <Video className='size-3.5' aria-hidden />
+                  Video call
+                </Link>
+              )}
               {!isCompleted && <Button
                 type='button'
                 variant='outline'

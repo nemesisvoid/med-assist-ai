@@ -279,9 +279,26 @@ const ChatSection = ({ selectedConversationId, selectedConversation, userId, use
                                     <WifiOff size={11} />Reconnecting…
                                 </span>
                             )}
-                            <button id='btn-video-call' aria-label='Start video call' className='w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500'>
-                                <VideoIcon size={18} />
-                            </button>
+                            {activeAppt && activeAppt.status !== 'CANCELLED' && activeAppt.status !== 'COMPLETED' ? (
+                                <Link
+                                    id='btn-video-call'
+                                    href={`/call/${activeAppt.id}`}
+                                    aria-label={`Start a video call with ${selectedConversation.name}`}
+                                    title='Start a video call for this appointment'
+                                    className='w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-blue-600 transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500'>
+                                    <VideoIcon size={18} />
+                                </Link>
+                            ) : (
+                                <button
+                                    id='btn-video-call'
+                                    type='button'
+                                    disabled
+                                    aria-label='Video calls are available during an open appointment'
+                                    title='Video calls are available during an open appointment'
+                                    className='w-9 h-9 rounded-xl flex items-center justify-center text-slate-300 cursor-not-allowed'>
+                                    <VideoIcon size={18} />
+                                </button>
+                            )}
                             <button id='btn-chat-info' aria-label='View information' className='w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500'>
                                 <InfoIcon size={18} />
                             </button>
