@@ -20,6 +20,9 @@ export const SuspendUserSchema = z.object({
 export const InviteDoctorSchema = z.object({
   name: z.string().trim().min(2, { message: 'Full name is required' }).max(100),
   email: z.email({ message: 'Enter a valid email' }).transform(v => v.toLowerCase()),
+  providerType: z.enum(['DOCTOR', 'THERAPIST']).default('DOCTOR'),
+  /** Post-nominal credentials for therapists, e.g. "LMFT", "PsyD". */
+  credentials: z.string().trim().max(30).optional().or(z.literal('')),
   specialty: z.string().trim().min(2, { message: 'Specialty is required' }).max(80),
   licenseNumber: z.string().trim().max(40).optional().or(z.literal('')),
   yearsOfExperience: z.coerce.number().int().min(0).max(70).optional(),

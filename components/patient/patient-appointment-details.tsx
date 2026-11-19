@@ -62,7 +62,7 @@ export default function PatientAppointmentDetails({ appointment }: Props) {
               </div>
 
               <p className='text-xs text-slate-500 font-medium truncate'>
-                {doctor ? formatDoctorName(doctor.name) : 'Doctor not yet assigned'}&nbsp;
+                {doctor ? formatDoctorName(doctor.name, doctorProfile) : 'Clinician not yet assigned'}&nbsp;
                 {doctorProfile?.specialty && (
                   <span className='text-slate-400'>· {doctorProfile.specialty}</span>
                 )}

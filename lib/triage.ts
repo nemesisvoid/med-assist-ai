@@ -14,6 +14,7 @@ import * as z from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createNotification } from '@/lib/notifications';
 import { AIServiceError, generateJson, logAIError, toAIServiceError } from '@/lib/ai';
+import { isTherapySession, THERAPY_TRIAGE_GUIDANCE } from '@/lib/ai-prompts';
 
 const TriageSchema = z.object({
   riskLevel: z.enum(['LOW', 'MEDIUM', 'HIGH']),
@@ -39,6 +40,7 @@ export async function runTriage(appointmentId: string, { notifyDoctorOnFailure =
     include: {
       intakeForm: true,
       patient: { include: { patientProfile: true } },
+      doctor: { select: { doctorProfile: { select: { providerType: true } } } },
     },
   });
 
@@ -74,6 +76,7 @@ Allergies: ${appointment.intakeForm.allergies ?? 'None noted'}
 Medications: ${appointment.intakeForm.medications ?? 'None noted'}
 Medical History: ${appointment.patient.patientProfile?.medicalHistory ?? 'None provided'}
 
+${isTherapySession(appointment.doctor?.doctorProfile?.providerType) ? THERAPY_TRIAGE_GUIDANCE : ''}
 --- INSTRUCTIONS ---
 - Cross-reference current symptoms and chief complaints against any listed Allergies, Medications, and Medical History to spot contraindications or hidden complications.
 - Keep the "aiRiskSummary" clinical,objective, concise (2-3 sentences), and free of conversational filler.

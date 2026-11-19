@@ -21,11 +21,13 @@ export const InviteDoctorButton = () => {
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors },
   } = useForm<InviteForm>({
     resolver: zodResolver(InviteDoctorSchema),
-    defaultValues: { name: '', email: '', specialty: '', licenseNumber: '' },
+    defaultValues: { name: '', email: '', providerType: 'DOCTOR', credentials: '', specialty: '', licenseNumber: '' },
   });
+  const providerType = watch('providerType');
 
   const close = () => {
     setOpen(false);
@@ -60,21 +62,51 @@ export const InviteDoctorButton = () => {
           className='size-4'
           aria-hidden
         />
-        Invite doctor
+        Invite clinician
       </button>
 
       <ActionDialog
         open={open}
         onOpenChange={o => (o ? setOpen(true) : close())}
-        title='Invite a doctor'
+        title='Invite a clinician'
         description='We’ll create their provider account and email them a secure link to set a password. You never see or handle their credentials.'
         confirmLabel='Send invitation'
         pending={isPending}
         onConfirm={handleSubmit(values => run(() => inviteDoctor(values), close))}>
         <div className='grid gap-4'>
-          {field('name', 'Full name', { placeholder: 'Dr. Amara Okafor', autoComplete: 'off' })}
+          <fieldset>
+            <legend className={fieldLabelClass}>Clinician type</legend>
+            <div className='grid grid-cols-2 gap-2'>
+              {(
+                [
+                  ['DOCTOR', 'Doctor', 'Shown as “Dr. Name”'],
+                  ['THERAPIST', 'Therapist', 'Shown with credentials, e.g. “Name, LMFT”'],
+                ] as const
+              ).map(([value, label, hint]) => (
+                <label
+                  key={value}
+                  className={cn(
+                    'flex cursor-pointer flex-col rounded-xl border p-3 transition-colors',
+                    providerType === value ? 'border-blue-500 bg-blue-50/50 ring-1 ring-blue-500' : 'border-slate-200 hover:bg-slate-50',
+                  )}>
+                  <span className='flex items-center gap-2 text-sm font-semibold text-slate-800'>
+                    <input
+                      type='radio'
+                      value={value}
+                      className='accent-blue-600'
+                      {...register('providerType')}
+                    />
+                    {label}
+                  </span>
+                  <span className='mt-0.5 pl-5 text-[11px] text-slate-500'>{hint}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          {field('name', 'Full name', { placeholder: 'Amara Okafor', autoComplete: 'off' })}
           {field('email', 'Work email', { type: 'email', placeholder: 'amara.okafor@clinic.org', autoComplete: 'off' })}
-          {field('specialty', 'Specialty', { placeholder: 'Family Medicine' })}
+          {providerType === 'THERAPIST' && field('credentials', 'Credentials (optional)', { placeholder: 'LMFT, LCSW, PsyD…' })}
+          {field('specialty', 'Specialty', { placeholder: providerType === 'THERAPIST' ? 'Anxiety & depression' : 'Family Medicine' })}
           <div className='grid gap-4 sm:grid-cols-2'>
             {field('licenseNumber', 'License no. (optional)', { placeholder: 'MD-20489' })}
             {field('yearsOfExperience', 'Years of experience', { type: 'number', min: 0, max: 70, inputMode: 'numeric', placeholder: '8' })}

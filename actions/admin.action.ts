@@ -175,6 +175,8 @@ export async function inviteDoctor(input: InviteDoctorInput) {
             licenseNumber: data.licenseNumber || null,
             yearsOfExperience: data.yearsOfExperience ?? null,
             availabilityStatus: 'OFFLINE',
+            providerType: data.providerType,
+            credentials: data.providerType === 'THERAPIST' ? data.credentials || null : null,
           },
         },
       },
@@ -188,7 +190,7 @@ export async function inviteDoctor(input: InviteDoctorInput) {
       action: 'DOCTOR_INVITED',
       entityType: 'User',
       entityId: user.id,
-      summary: `Invited doctor (${data.specialty})`,
+      summary: `Invited ${data.providerType === 'THERAPIST' ? 'therapist' : 'doctor'} (${data.specialty})`,
       metadata: { specialty: data.specialty },
     });
 

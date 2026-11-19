@@ -15,6 +15,7 @@ import { generateMedicalRecordNumber } from '@/lib/utils';
 import { createNotification } from '@/lib/notifications';
 import { after } from 'next/server';
 import { runTriage } from '@/lib/triage';
+import { ANY_AVAILABLE_CLINICIAN } from '@/constants/booking';
 import { authFailure, getSessionWithRole, requireAppointmentPatient, requireRole } from '@/lib/authz';
 
 export const getPatientProfile = async () => {
@@ -69,19 +70,26 @@ export const createAppointment = async (formData: z.infer<typeof AppointmentForm
     if (!validatedData.success) return { success: false, message: 'Please check the form and try again.' };
     const { data } = validatedData;
 
-    // The doctor must be a real, active clinician who has accepted their invite.
-    const doctor = await prisma.user.findFirst({
-      where: { id: data.doctor, role: 'DOCTOR', banned: false, accounts: { some: {} } },
-      select: { id: true },
-    });
-    if (!doctor) return { success: false, message: 'That doctor is not available. Please choose another.' };
+    // "Any available" creates an unassigned appointment that an administrator assigns.
+    const anyAvailable = data.doctor === ANY_AVAILABLE_CLINICIAN;
 
-    // Enforced here, not only in the UI: one open appointment per patient-doctor pair.
-    const active = await prisma.appointment.findFirst({
-      where: { patientId, doctorId: doctor.id, status: { notIn: ['COMPLETED', 'CANCELLED'] } },
-      select: { id: true },
-    });
-    if (active) return { success: false, message: 'You already have an open appointment with this doctor.' };
+    // Otherwise the clinician must be real, active and have accepted their invite.
+    const doctor = anyAvailable
+      ? null
+      : await prisma.user.findFirst({
+          where: { id: data.doctor, role: 'DOCTOR', banned: false, accounts: { some: {} } },
+          select: { id: true },
+        });
+    if (!anyAvailable && !doctor) return { success: false, message: 'That clinician is not available. Please choose another.' };
+
+    // Enforced here, not only in the UI: one open appointment per patient-clinician pair.
+    if (doctor) {
+      const active = await prisma.appointment.findFirst({
+        where: { patientId, doctorId: doctor.id, status: { notIn: ['COMPLETED', 'CANCELLED'] } },
+        select: { id: true },
+      });
+      if (active) return { success: false, message: 'You already have an open appointment with this clinician.' };
+    }
 
     const res = await prisma.appointment.create({
       data: {
@@ -90,7 +98,7 @@ export const createAppointment = async (formData: z.infer<typeof AppointmentForm
         scheduledTime: data.scheduledTime,
         appointmentReason: data.appointmentReason,
         appointmentType: data.appointmentType,
-        doctorId: doctor.id,
+        doctorId: doctor?.id ?? null,
       },
     });
 
@@ -106,12 +114,14 @@ export const createAppointment = async (formData: z.infer<typeof AppointmentForm
       title: 'Appointment Scheduled',
       message: `Please complete your intake form for your ${res.appointmentType} appointment`,
     });
-    await createNotification({
-      type: 'APPOINTMENT',
-      userId: doctor.id,
-      title: 'New Appointment Assigned',
-      message: 'A new patient appointment has been assigned to you',
-    });
+    if (doctor) {
+      await createNotification({
+        type: 'APPOINTMENT',
+        userId: doctor.id,
+        title: 'New Appointment Assigned',
+        message: 'A new patient appointment has been assigned to you',
+      });
+    }
 
     return { success: true, message: 'Appointment created successfully' };
   } catch (error) {

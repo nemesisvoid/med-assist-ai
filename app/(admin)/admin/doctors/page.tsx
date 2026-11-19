@@ -7,6 +7,7 @@ import { ClearFilters, FilterBar, SearchFilter, SelectFilter } from '@/component
 import { AvailabilitySelect, InviteDoctorButton, ResendInviteButton } from '@/components/admin/doctor-actions';
 import { listDoctors } from '@/lib/data/admin';
 import { requireAdminPage } from '@/lib/authz';
+import { formatDoctorName, PROVIDER_TYPE_LABEL } from '@/lib/utils';
 import type { DoctorAvailabilityStatus } from '@/generated/prisma/enums';
 
 export const metadata: Metadata = { title: 'Doctors' };
@@ -22,8 +23,8 @@ const DoctorsPage = async ({ searchParams }: { searchParams: Promise<{ q?: strin
   return (
     <div className='flex flex-col gap-6'>
       <PageHeader
-        title='Doctors'
-        description='Onboard clinicians, track their caseload and set availability for appointment assignment.'
+        title='Clinicians'
+        description='Onboard doctors and therapists, track their caseload and set availability for appointment assignment.'
         actions={<InviteDoctorButton />}
       />
 
@@ -66,9 +67,11 @@ const DoctorsPage = async ({ searchParams }: { searchParams: Promise<{ q?: strin
                     <Link
                       href={`/admin/users/${doctor.id}`}
                       className='block truncate text-sm font-bold text-slate-900 hover:text-blue-600'>
-                      {doctor.name}
+                      {formatDoctorName(doctor.name, doctor.doctorProfile)}
                     </Link>
-                    <p className='truncate text-xs font-medium text-blue-700'>{doctor.doctorProfile?.specialty ?? 'No specialty'}</p>
+                    <p className='truncate text-xs font-medium text-blue-700'>
+                      {PROVIDER_TYPE_LABEL[doctor.doctorProfile?.providerType ?? 'DOCTOR']} · {doctor.doctorProfile?.specialty ?? 'No specialty'}
+                    </p>
                     <p className='mt-0.5 truncate text-xs text-slate-500'>{doctor.email}</p>
                   </div>
                   <AccountStatusBadge

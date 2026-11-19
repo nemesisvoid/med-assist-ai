@@ -555,7 +555,7 @@ export default function DoctorAppointmentDetails({ appointment: initialAppointme
                               </span>
                             </div>
                             <p className='text-[11px] text-slate-500 font-medium mt-0.5'>
-                              Appointment of type {appointment.appointmentType} created with {appointment.doctor?.name ? formatDoctorName(appointment.doctor.name) : 'an unassigned doctor'}.
+                              Appointment of type {appointment.appointmentType} created with {appointment.doctor?.name ? formatDoctorName(appointment.doctor.name, appointment.doctor.doctorProfile) : 'an unassigned clinician'}.
                             </p>
                           </div>
                         </div>
