@@ -19,8 +19,15 @@ import { createAppointment } from '@/actions/patient.action';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { AlertCircleIcon } from 'lucide-react';
+import type { OpeningHours } from '@/lib/clinic-hours';
 
-const PatientAppointmentForm = ({ userId }) => {
+type PatientAppointmentFormProps = {
+  userId: string;
+  openingHours: OpeningHours;
+  timezone: string;
+};
+
+const PatientAppointmentForm = ({ userId, openingHours, timezone }: PatientAppointmentFormProps) => {
   const router = useRouter();
 
   const [currentStep, setCurrentStep] = useState(0);
@@ -146,7 +153,7 @@ const PatientAppointmentForm = ({ userId }) => {
         <div className='mx-auto'>
           {currentStep === 0 && <VisitType form={form} />}
           {currentStep === 1 && <SelectDoctor form={form} userId={userId} onConflict={setActiveConflict} />}
-          {currentStep === 2 && <DateTime form={form} />}
+          {currentStep === 2 && <DateTime form={form} openingHours={openingHours} timezone={timezone} />}
           {currentStep === 3 && <Details form={form} />}
           {currentStep === 4 && <Confirm form={form} />}
         </div>

@@ -21,6 +21,8 @@ import {
   type InviteAdminInput,
   type InviteDoctorInput,
 } from '@/validations/admin';
+import { ClinicSettingsSchema, type ClinicSettingsInput } from '@/validations/clinic';
+import { CLINIC_SETTINGS_ID, getClinicSettings } from '@/lib/clinic';
 
 export type ActionResult = { ok: true; message: string } | { ok: false; error: string };
 
@@ -352,5 +354,61 @@ export async function cancelAppointment(input: z.input<typeof CancelAppointmentS
 
     revalidateAdmin('/admin/appointments', `/admin/appointments/${appointmentId}`);
     return { ok: true, message: 'Appointment cancelled and both parties notified.' };
+  });
+}
+
+// ─── Clinic settings ───────────────────────────────────────────────────────────
+
+const CLINIC_FIELD_LABELS: Record<string, string> = {
+  name: 'name',
+  phone: 'phone',
+  email: 'email',
+  addressLine1: 'address',
+  addressLine2: 'address',
+  city: 'address',
+  state: 'address',
+  postalCode: 'address',
+  country: 'address',
+  mapUrl: 'map link',
+  arrivalInstructions: 'arrival instructions',
+  timezone: 'timezone',
+  openingHours: 'opening hours',
+  inPersonEnabled: 'visit types',
+  videoEnabled: 'visit types',
+  emergencyNumber: 'emergency number',
+};
+
+export async function updateClinicSettings(input: ClinicSettingsInput) {
+  return adminAction(async adminId => {
+    const data = ClinicSettingsSchema.parse(input);
+    const current = await getClinicSettings();
+
+    const changed = [
+      ...new Set(
+        (Object.keys(CLINIC_FIELD_LABELS) as (keyof typeof data)[])
+          .filter(key => JSON.stringify(data[key] ?? null) !== JSON.stringify((current as Record<string, unknown>)[key] ?? null))
+          .map(key => CLINIC_FIELD_LABELS[key]),
+      ),
+    ];
+    if (changed.length === 0) return { ok: true, message: 'No changes to save.' };
+
+    await prisma.clinicSettings.upsert({
+      where: { id: CLINIC_SETTINGS_ID },
+      create: { id: CLINIC_SETTINGS_ID, ...data, updatedById: adminId },
+      update: { ...data, updatedById: adminId },
+    });
+
+    await recordAudit({
+      actorId: adminId,
+      action: 'CLINIC_SETTINGS_UPDATED',
+      entityType: 'ClinicSettings',
+      entityId: CLINIC_SETTINGS_ID,
+      summary: `Updated clinic settings: ${changed.join(', ')}`,
+      metadata: { fields: changed },
+    });
+
+    // Settings appear across the app (booking, chat, appointments), so refresh everything.
+    revalidatePath('/', 'layout');
+    return { ok: true, message: 'Clinic settings saved.' };
   });
 }

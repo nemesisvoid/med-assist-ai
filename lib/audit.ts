@@ -5,7 +5,7 @@ import type { AuditAction, Prisma } from '@/generated/prisma/client';
 export type AuditEntry = {
   actorId?: string | null;
   action: AuditAction;
-  entityType: 'User' | 'DoctorProfile' | 'Appointment' | 'Session' | 'PatientRecord' | 'MessageAttachment' | 'Message';
+  entityType: 'User' | 'DoctorProfile' | 'Appointment' | 'Session' | 'PatientRecord' | 'MessageAttachment' | 'Message' | 'ClinicSettings';
   entityId?: string | null;
   /** Human-readable, PHI-free description, e.g. "Changed role from PATIENT to ADMIN". */
   summary: string;

@@ -12,6 +12,7 @@ import {
   CalendarCheckIcon,
   LayoutDashboardIcon,
   ScrollTextIcon,
+  Building2Icon,
   StethoscopeIcon,
   UsersIcon,
 } from 'lucide-react';
@@ -213,5 +214,9 @@ export const adminSidebarSections = [
   {
     label: 'Compliance',
     links: [{ name: 'Audit Log', href: '/admin/audit-logs', icon: ScrollTextIcon }],
+  },
+  {
+    label: 'Clinic',
+    links: [{ name: 'Clinic settings', href: '/admin/settings', icon: Building2Icon }],
   },
 ];
