@@ -28,7 +28,7 @@ type ConversationItem = {
     appointmentStatus?: string;
     /** The appointment currently open for messaging */
     activeAppointment?: AppointmentInfo | null;
-    /** ISO date — chat becomes read-only after this (7 days after COMPLETED) */
+    /** ISO date — chat becomes read-only after this (CHAT_LOCK_DAYS after COMPLETED) */
     chatLocksAt?: string | null;
     messages?: SocketMessage[];
 };
