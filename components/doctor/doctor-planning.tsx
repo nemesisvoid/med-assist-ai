@@ -24,9 +24,11 @@ interface DoctorPlanningProps {
     form: UseFormReturn<ClinicalNotesFormValues>;
     appointmentId: string;
     isCompleted: boolean;
+    /** Clinical notes have been saved; the AI summary is written from them. */
+    hasSavedNotes: boolean;
 }
 
-export default function DoctorPlanning({ form, appointmentId, isCompleted }: DoctorPlanningProps) {
+export default function DoctorPlanning({ form, appointmentId, isCompleted, hasSavedNotes }: DoctorPlanningProps) {
     const [isGenerating, startGenerating] = useTransition();
     const { fields, append, remove } = useFieldArray({
         control: form.control,
@@ -292,20 +294,28 @@ export default function DoctorPlanning({ form, appointmentId, isCompleted }: Doc
                             </p>
                         </div>
                     </div>
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-8 border-indigo-200 text-indigo-600 bg-white hover:bg-indigo-50 shrink-0"
-                        onClick={handleGenerateSummary}
-                        disabled={isGenerating}
-                    >
-                        {isGenerating
-                            ? <RefreshCw className="size-3.5 animate-spin" />
-                            : <Sparkles className="size-3.5" />
-                        }
-                        {isGenerating ? "Generating..." : "Generate with AI"}
-                    </Button>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-8 border-indigo-200 text-indigo-600 bg-white hover:bg-indigo-50"
+                            onClick={handleGenerateSummary}
+                            disabled={isGenerating || !hasSavedNotes}
+                            aria-describedby={!hasSavedNotes ? "summary-needs-notes" : undefined}
+                        >
+                            {isGenerating
+                                ? <RefreshCw className="size-3.5 animate-spin" />
+                                : <Sparkles className="size-3.5" />
+                            }
+                            {isGenerating ? "Generating..." : "Generate with AI"}
+                        </Button>
+                        {!hasSavedNotes && !isCompleted && (
+                            <p id="summary-needs-notes" className="text-[10px] font-medium text-slate-500">
+                                Save clinical notes first
+                            </p>
+                        )}
+                    </div>
                 </CardHeader>
                 <CardContent className="p-5">
                     <FormField

@@ -32,7 +32,7 @@ import {
   requestUpdatedIntakeAction,
   applySoapDraftAction,
 } from '@/actions/doctor.action';
-import { cn, formatEnums, formatRiskLabel, getAppointmentStatusStyle, getPriorityStyle, getRiskLevelStyle, formatDoctorName } from '@/lib/utils';
+import { cn, formatEnums, formatRiskLabel, hasSavedClinicalNote, getAppointmentStatusStyle, getPriorityStyle, getRiskLevelStyle, formatDoctorName } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -602,6 +602,7 @@ export default function DoctorAppointmentDetails({ appointment: initialAppointme
                 <DoctorPlanning
                   form={form}
                   isCompleted={isCompleted}
+                  hasSavedNotes={hasSavedClinicalNote(appointment.clinicalNote)}
                   appointmentId={appointment.id}
                 />
               </div>

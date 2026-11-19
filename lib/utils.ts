@@ -73,6 +73,14 @@ export function getRiskLevelStyle(risk: RiskLevel | null | undefined): string {
   }
 }
 
+/** A clinical note counts as saved only if at least one clinical section has content. */
+export function hasSavedClinicalNote(
+  note?: { subjective?: string | null; objective?: string | null; assessment?: string | null; plan?: string | null; diagnosis?: string | null } | null,
+): boolean {
+  if (!note) return false;
+  return [note.subjective, note.objective, note.assessment, note.plan, note.diagnosis].some(v => !!v?.trim());
+}
+
 export const getAge = (dateString?: string | Date | null) => {
   if (!dateString) return 0;
   const today = new Date();
