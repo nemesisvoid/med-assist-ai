@@ -41,7 +41,7 @@ export default function PatientAppointmentSidebar({ appointment, isCompleted, is
                 </AvatarFallback>
               </Avatar>
               <div className='min-w-0'>
-                <p className='text-sm font-bold text-slate-800 truncate'>{formatDoctorName(doctor.name)}</p>
+                <p className='text-sm font-bold text-slate-800 truncate'>{formatDoctorName(doctor.name, doctorProfile)}</p>
                 {doctorProfile?.specialty && (
                   <p className='text-xs text-slate-500 truncate'>{doctorProfile.specialty}</p>
                 )}

@@ -5,7 +5,9 @@ import * as z from 'zod';
 
 import { Controller, UseFormReturn } from 'react-hook-form';
 import { Search, Sparkles, AlertCircle } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatDoctorName } from '@/lib/utils';
+import { ANY_AVAILABLE_CLINICIAN } from '@/constants/booking';
+import type { ProviderType } from '@/generated/prisma/enums';
 import { searchDoctors } from '@/actions/doctor.action';
 import { checkActiveAppointment } from '@/actions/patient.action';
 import { AppointmentFormSchema } from '@/validations/validation';
@@ -18,11 +20,12 @@ type SelectDoctorProps = {
 export type DoctorResult = {
   id: string;
   name: string;
-  email: string;
-  role: string;
+  image?: string | null;
   doctorProfile: {
     availabilityStatus: string;
     specialty: string;
+    providerType: ProviderType;
+    credentials: string | null;
     yearsOfExperience: number | null;
     bio: string | null;
     imageUrl: string | null;
@@ -30,7 +33,7 @@ export type DoctorResult = {
 };
 
 const getInitials = (name: string) => {
-  const parts = name.replace('Dr. ', '').split(' ');
+  const parts = name.replace(/^dr\.?\s+/i, '').split(' ');
   return parts
     .map(p => p[0])
     .join('')
@@ -44,6 +47,7 @@ const SelectDoctor = ({ form, userId, onConflict }: SelectDoctorProps) => {
   const [searchResults, setSearchResults] = useState<DoctorResult[]>([]);
   const [isPending, setIsPending] = useState<boolean>(false);
   const [conflictDoctorId, setConflictDoctorId] = useState<string | null>(null);
+  const [providerType, setProviderType] = useState<ProviderType | 'ALL'>('ALL');
 
   const handleDoctorSelect = async (field: any, doctorId: string) => {
     field.onChange(doctorId);
@@ -62,7 +66,7 @@ const SelectDoctor = ({ form, userId, onConflict }: SelectDoctorProps) => {
     async function fetchDoctors() {
       try {
         setIsPending(true);
-        const doctors = await searchDoctors(debouncedSearch);
+        const doctors = await searchDoctors(debouncedSearch, providerType === 'ALL' ? undefined : providerType);
 
         setSearchResults((doctors as unknown as DoctorResult[]) || []);
       } catch (error) {
@@ -72,11 +76,32 @@ const SelectDoctor = ({ form, userId, onConflict }: SelectDoctorProps) => {
       }
     }
     fetchDoctors();
-  }, [debouncedSearch]);
+  }, [debouncedSearch, providerType]);
 
   return (
     <div className='animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-3xl mx-auto'>
-      <h3 className='font-semibold text-lg text-text-base mb-6'>Choose a doctor</h3>
+      <h3 className='font-semibold text-lg text-text-base mb-1'>Choose a clinician</h3>
+      <p className='text-sm text-text-muted mb-5'>See a doctor for physical health, or a therapist for mental and emotional wellbeing.</p>
+      <div role='radiogroup' aria-label='Type of clinician' className='mb-4 inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1'>
+        {([
+          ['ALL', 'All'],
+          ['DOCTOR', 'Doctors'],
+          ['THERAPIST', 'Therapists'],
+        ] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type='button'
+            role='radio'
+            aria-checked={providerType === value}
+            onClick={() => setProviderType(value)}
+            className={cn(
+              'cursor-pointer rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+              providerType === value ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800',
+            )}>
+            {label}
+          </button>
+        ))}
+      </div>
       <Controller
         name='doctor'
         control={form.control}
@@ -102,13 +127,13 @@ const SelectDoctor = ({ form, userId, onConflict }: SelectDoctorProps) => {
               <button
                 type='button'
                 onClick={() => {
-                  field.onChange('any_available');
+                  field.onChange(ANY_AVAILABLE_CLINICIAN);
                   setConflictDoctorId(null);
                   onConflict(false);
                 }}
                 className={cn(
                   'flex items-start gap-4 p-5 rounded-xl border transition-all text-left w-full',
-                  field.value === 'any_available'
+                  field.value === ANY_AVAILABLE_CLINICIAN
                     ? 'border-blue-600 bg-blue-50/30 shadow-sm ring-1 ring-blue-600'
                     : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm',
                 )}>
@@ -119,10 +144,10 @@ const SelectDoctor = ({ form, userId, onConflict }: SelectDoctorProps) => {
                   />
                 </div>
                 <div className='flex flex-col gap-1'>
-                  <h4 className='font-bold text-slate-900 text-[15px]'>Any Available Doctor</h4>
-                  <p className='text-xs font-medium text-slate-500'>All Specialties</p>
+                  <h4 className='font-bold text-slate-900 text-[15px]'>Any available clinician</h4>
+                  <p className='text-xs font-medium text-slate-500'>All specialties</p>
                   <p className='text-sm text-slate-500 mt-1'>
-                    We&apos;ll assign the best-suited available doctor based on your visit type and symptoms.
+                    Our team will assign the best-suited available clinician based on your visit type and symptoms.
                   </p>
                 </div>
               </button>
@@ -169,7 +194,16 @@ const SelectDoctor = ({ form, userId, onConflict }: SelectDoctorProps) => {
                         {/* Content */}
                         <div className='flex flex-col w-full'>
                           <div className='flex items-start justify-between mb-1'>
-                            <h4 className='font-bold text-slate-900 text-[15px]'>{doc.name}</h4>
+                            <div>
+                              <h4 className='font-bold text-slate-900 text-[15px]'>{formatDoctorName(doc.name, profile)}</h4>
+                              <span
+                                className={cn(
+                                  'mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider',
+                                  profile?.providerType === 'THERAPIST' ? 'bg-violet-50 text-violet-700' : 'bg-blue-50 text-blue-700',
+                                )}>
+                                {profile?.providerType === 'THERAPIST' ? 'Therapist' : 'Doctor'}
+                              </span>
+                            </div>
 
                             {/* Availability Badge */}
                             {isAvailable ? (

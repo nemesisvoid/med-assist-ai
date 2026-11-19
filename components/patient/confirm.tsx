@@ -8,6 +8,7 @@ import { FileTextIcon, LoaderIcon } from 'lucide-react';
 
 import { AppointmentFormSchema } from '@/validations/validation';
 import { getDoctorById } from '@/actions/doctor.action';
+import { formatDoctorName } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 
 interface ConfirmProps {
@@ -15,7 +16,7 @@ interface ConfirmProps {
 }
 
 const Confirm = ({ form }: ConfirmProps) => {
-  const [selectedDoctor, setSelectedDoctor] = useState<string | undefined>('');
+  const [selectedDoctor, setSelectedDoctor] = useState<Awaited<ReturnType<typeof getDoctorById>>>(null);
   const values = form.getValues();
 
   const [isPending, setIsPending] = useState(false);
@@ -35,7 +36,6 @@ const Confirm = ({ form }: ConfirmProps) => {
     }
     getDoc();
   }, [values.doctor]);
-  console.log(selectedDoctor);
 
   return (
     <div className='animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-xl mx-auto'>
@@ -62,9 +62,15 @@ const Confirm = ({ form }: ConfirmProps) => {
         </div>
 
         <div className='flex justify-between border-b border-border-subtle pb-4'>
-          <span className='text-text-muted text-sm'>Doctor</span>
+          <span className='text-text-muted text-sm'>Clinician</span>
           <span className='font-medium text-text-base'>
-            {isPending ? <LoaderIcon className='animate-spin size-4' /> : selectedDoctor?.user?.name || 'Any Available'}
+            {isPending ? (
+              <LoaderIcon className='animate-spin size-4' />
+            ) : selectedDoctor?.user?.name ? (
+              formatDoctorName(selectedDoctor.user.name, selectedDoctor)
+            ) : (
+              'Any available clinician'
+            )}
           </span>
         </div>
 

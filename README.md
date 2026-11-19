@@ -31,7 +31,10 @@ MedAssist AI is a telehealth platform that connects patients with doctors and cu
 - **Visit summaries** written for patients, plus diagnosis, treatment plan and prescriptions.
 - **Notifications** and **real-time messaging** with the assigned doctor, including **image and file attachments** (photos, PDFs, Word and text files up to 10 MB).
 
-### Doctors
+### Clinicians (doctors and therapists)
+
+Clinicians are either **doctors** (shown as "Dr. Name") or **therapists** (shown with their credentials, e.g. "Jane Doe, LMFT"). Patients can filter by type when booking. For therapy sessions, the AI triage, SOAP draft and patient summary use mental-health-specific guidance (self-harm and safety screening, therapy progress notes, "your therapist" wording); everything else works the same for both.
+
 - **Clinical dashboard** with the next appointment, a calendar, an appointment volume chart and recent patients.
 - **AI workflow insights** on every appointment: suggested risk level, priority, a triage summary and recommendations.
 - **AI SOAP drafts** (Subjective, Objective, Assessment, Plan) that can be applied, edited and saved as the clinical note.
@@ -42,7 +45,7 @@ MedAssist AI is a telehealth platform that connects patients with doctors and cu
 - **Platform dashboard**: patient growth, active doctors, 30-day appointment volume with period-over-period change, completion rate, tiles for high-risk, unassigned and suspended items that need attention, the status pipeline, doctor workload and recent activity.
 - **User management**: search by name, email or MRN; filter by role and status; change roles; suspend and reactivate accounts with a recorded reason; sign a user out of every device.
 - **Admin onboarding**: invite another administrator by email. Like doctors, they set their own password through a single-use link. The last active administrator can't be demoted or suspended.
-- **Doctor onboarding**: invite a clinician by email. They set their own password through a single-use link, so admins never handle credentials. Admins can also set availability and resend invites.
+- **Clinician onboarding**: invite a doctor or therapist by email. They set their own password through a single-use link, so admins never handle credentials. Admins can also set availability and resend invites.
 - **Appointment oversight**: filter by status, priority, risk and assignment; assign or reassign doctors; cancel visits with notifications to every party.
 - **Audit log**: a filterable, paginated history of sign-ins, account changes, admin actions and patient-record access.
 

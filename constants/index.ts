@@ -206,7 +206,7 @@ export const adminSidebarSections = [
     label: 'Management',
     links: [
       { name: 'Users', href: '/admin/users', icon: UsersIcon },
-      { name: 'Doctors', href: '/admin/doctors', icon: StethoscopeIcon },
+      { name: 'Clinicians', href: '/admin/doctors', icon: StethoscopeIcon },
       { name: 'Appointments', href: '/admin/appointments', icon: CalendarCheckIcon },
     ],
   },

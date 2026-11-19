@@ -51,6 +51,11 @@ enum SeverityLevel {
   SEVERE
 }
 
+enum ProviderType {
+  DOCTOR
+  THERAPIST
+}
+
 enum RiskLevel {
   LOW
   MEDIUM
@@ -178,6 +183,10 @@ model DoctorProfile {
   id     String @id @default(cuid())
   userId String @unique
 
+  /// DOCTOR (medical) or THERAPIST (mental health). Drives display names and AI prompts.
+  providerType      ProviderType @default(DOCTOR)
+  /// Post-nominal credentials shown after a therapist's name, e.g. "LMFT", "PsyD".
+  credentials       String?
   specialty         String
   licenseNumber     String?
   yearsOfExperience Int?

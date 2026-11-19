@@ -305,7 +305,7 @@ export async function listDoctors(params: { q?: string; availability?: DoctorAva
       image: true,
       banned: true,
       createdAt: true,
-      doctorProfile: { select: { id: true, specialty: true, licenseNumber: true, yearsOfExperience: true, availabilityStatus: true, imageUrl: true } },
+      doctorProfile: { select: { id: true, specialty: true, providerType: true, credentials: true, licenseNumber: true, yearsOfExperience: true, availabilityStatus: true, imageUrl: true } },
       accounts: { select: { providerId: true } },
     },
     orderBy: { name: 'asc' },

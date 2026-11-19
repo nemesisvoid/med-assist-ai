@@ -10,6 +10,8 @@ import { clinicalNotesSchema } from '@/schema/validators';
 import { AppointmentStatus } from '@/generated/prisma/enums';
 import { recordAudit } from '@/lib/audit';
 import { CHAT_LOCK_DAYS } from '@/lib/messaging-constants';
+import { isTherapySession, THERAPY_SOAP_GUIDANCE, THERAPY_SUMMARY_GUIDANCE } from '@/lib/ai-prompts';
+import type { ProviderType } from '@/generated/prisma/enums';
 import { aiFailure, generateJson, generateText } from '@/lib/ai';
 import { runTriage } from '@/lib/triage';
 import { authFailure, getSessionWithRole, requireAssignedDoctor, requireRole } from '@/lib/authz';
@@ -39,6 +41,8 @@ export const getDoctorById = async (doctorId: string) => {
       where: { userId: doctorId, user: { role: 'DOCTOR' } },
       select: {
         specialty: true,
+        providerType: true,
+        credentials: true,
         yearsOfExperience: true,
         bio: true,
         imageUrl: true,
@@ -53,15 +57,17 @@ export const getDoctorById = async (doctorId: string) => {
 };
 
 /** Bookable doctors matching a search (signed-in users only; public profile fields only). */
-export const searchDoctors = async (query: string) => {
+export const searchDoctors = async (query: string, providerType?: ProviderType) => {
   try {
     const session = await getSessionWithRole();
     if (!session) return [];
+    const type = providerType === 'DOCTOR' || providerType === 'THERAPIST' ? providerType : undefined;
     const res = await prisma.user.findMany({
       where: {
         role: 'DOCTOR',
         banned: false,
         accounts: { some: {} },
+        ...(type ? { doctorProfile: { providerType: type } } : {}),
         OR: [
           {
             name: {
@@ -93,6 +99,8 @@ export const searchDoctors = async (query: string) => {
           select: {
             availabilityStatus: true,
             specialty: true,
+            providerType: true,
+            credentials: true,
             yearsOfExperience: true,
             bio: true,
             imageUrl: true,
@@ -292,6 +300,7 @@ export const generateSoapDraftAction = async (appointmentId: string) => {
             patientProfile: true,
           },
         },
+        doctor: { select: { doctorProfile: { select: { providerType: true } } } },
       },
     });
 
@@ -327,6 +336,7 @@ Generate structured, clean clinical notes for the following 4 sections of SOAP:
 4. Plan: Actions recommended for provider review (further consultations, checkups, guidelines).
 
 Ensure the wording feels like AI-assisted workflow guidance rather than definitive medical diagnosis.
+${isTherapySession(appointment.doctor?.doctorProfile?.providerType) ? THERAPY_SOAP_GUIDANCE : ''}
 
 Return ONLY a valid JSON object matching this exact format schema without markdown wrappers:
 {
@@ -463,7 +473,7 @@ export const generatePatientSummaryNotes = async (appointmentId: string, draftDa
         patient: {
           include: { patientProfile: true },
         },
-        doctor: true,
+        doctor: { include: { doctorProfile: { select: { providerType: true, credentials: true } } } },
         followUp: true,
         clinicalNote: {
           include: { prescriptions: true },
@@ -506,6 +516,7 @@ export const generatePatientSummaryNotes = async (appointmentId: string, draftDa
     const followUpNotes = draftData?.followUpNotes ?? followUp?.additionalNotes;
 
     const prompt = `You are a compassionate and highly skilled medical communication specialist at a modern telehealth platform called MedAssist AI. Your job is to generate a clear, warm, and easy-to-understand appointment summary letter addressed directly to the patient.
+${isTherapySession(doctor?.doctorProfile?.providerType) ? THERAPY_SUMMARY_GUIDANCE : ''}
 
 The summary must:
 - Use plain, jargon-free language that any adult can understand
@@ -522,7 +533,7 @@ APPOINTMENT DETAILS:
 - Date: ${new Date(appointment.scheduledAt).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
 - Time: ${appointment.scheduledTime ?? 'Not specified'}
 - Status: ${appointment.status}
-- Assigned Doctor: ${doctor?.name ?? 'Not yet assigned'}
+- Assigned Clinician: ${doctor ? formatDoctorName(doctor.name, doctor.doctorProfile) : 'Not yet assigned'}
 
 PATIENT INTAKE (What the patient reported before the appointment):
 - Chief Complaint: ${intake?.chiefComplaint ?? 'Not provided'}
@@ -666,6 +677,10 @@ export const markAppointmentCompleteAction = async (appointmentId: string) => {
 export const sendPatientNotificationAction = async ({ appointmentId, message }: { appointmentId: string; message: string }) => {
   try {
     const { session, appointment } = await requireAssignedDoctor(appointmentId);
+    const senderProfile = await prisma.doctorProfile.findUnique({
+      where: { userId: session.user.id },
+      select: { providerType: true, credentials: true },
+    });
     const text = message?.trim() ?? '';
     if (text.length === 0 || text.length > 1000) {
       return { success: false, message: 'Messages must be between 1 and 1000 characters.' };
@@ -675,7 +690,7 @@ export const sendPatientNotificationAction = async ({ appointmentId, message }: 
         userId: appointment.patientId,
         type: 'MESSAGE',
         // The sender name comes from the session, so a notice can't impersonate someone else.
-        title: `Message from ${formatDoctorName(session.user.name)}`,
+        title: `Message from ${formatDoctorName(session.user.name, senderProfile)}`,
         message: text,
         link: `/patient/appointment/${appointment.id}`,
       },
@@ -824,6 +839,8 @@ export const getPatientFullRecord = async (patientId: string) => {
                 doctorProfile: {
                   select: {
                     specialty: true,
+                    providerType: true,
+                    credentials: true,
                   }
                 }
               }

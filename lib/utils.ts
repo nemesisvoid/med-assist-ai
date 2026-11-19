@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { AppointmentStatus, RiskLevel } from '@/generated/prisma/enums';
+import { AppointmentStatus, RiskLevel, type ProviderType } from '@/generated/prisma/enums';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -110,7 +110,20 @@ export const getPriorityStyle = (priority: string) => {
 }
 
 /** Prefixes "Dr." unless the stored name already includes a title. */
-export const formatDoctorName = (name?: string | null) => {
+type ProviderProfileLike = { providerType?: ProviderType | null; credentials?: string | null } | null | undefined;
+
+export const PROVIDER_TYPE_LABEL: Record<ProviderType, string> = { DOCTOR: 'Doctor', THERAPIST: 'Therapist' };
+
+/**
+ * Display name for a clinician. Doctors are "Dr. Name"; therapists are shown
+ * with their credentials instead ("Name, LMFT"), since most aren't doctors.
+ */
+export const formatDoctorName = (name?: string | null, profile?: ProviderProfileLike) => {
+  if (profile?.providerType === 'THERAPIST') {
+    const clean = (name ?? '').trim().replace(/^dr\.?\s+/i, '');
+    if (!clean) return 'Therapist';
+    return profile.credentials?.trim() ? `${clean}, ${profile.credentials.trim()}` : clean;
+  }
   if (!name) return 'Doctor';
   return /^dr\.?\s/i.test(name.trim()) ? name.trim() : `Dr. ${name.trim()}`;
 };
