@@ -29,7 +29,7 @@ MedAssist AI is a telehealth platform that connects patients with doctors and cu
 - **Pre-visit intake form** (chief complaint, symptoms, pain score, allergies, medications) that feeds AI triage.
 - **Appointment journey tracker** from intake through to a completed visit.
 - **Visit summaries** written for patients, plus diagnosis, treatment plan and prescriptions.
-- **Notifications** and **real-time messaging** with the assigned doctor.
+- **Notifications** and **real-time messaging** with the assigned doctor, including **image and file attachments** (photos, PDFs, Word and text files up to 10 MB).
 
 ### Doctors
 - **Clinical dashboard** with the next appointment, a calendar, an appointment volume chart and recent patients.
@@ -112,6 +112,7 @@ MedAssist AI is a telehealth platform that connects patients with doctors and cu
 | Database | PostgreSQL ([Neon](https://neon.tech)) via [Prisma 7](https://www.prisma.io) and the `@prisma/adapter-pg` driver adapter |
 | AI | Google Gemini via [`@google/genai`](https://www.npmjs.com/package/@google/genai) (risk analysis, SOAP drafts, patient summaries) |
 | Real-time | [Socket.IO 4](https://socket.io) (standalone server in `server.ts`) |
+| File storage | [Cloudflare R2](https://developers.cloudflare.com/r2/) (private bucket, S3 API via `@aws-sdk/client-s3`) for chat attachments |
 | Email | [Resend](https://resend.com) REST API or any SMTP server via [Nodemailer](https://nodemailer.com) (console output in development) |
 | Notifications UI | Sonner toasts |
 | Dates | date-fns 4 |
@@ -221,6 +222,7 @@ All variables are documented in [`.env.example`](.env.example).
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional | Enables "Continue with Google". Redirect URI: `{BETTER_AUTH_URL}/api/auth/callback/google` |
 | `NEXT_PUBLIC_SOCKET_URL`, `SOCKET_PORT` | For chat | Where the Socket.IO server listens (hosts like Render set `PORT`, which takes precedence) |
 | `SOCKET_AUTH_SECRET` | For chat | Signs chat connection tokens. Must be the **same value** on the Next.js app and the socket server |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | For chat attachments | Private Cloudflare R2 bucket for files shared in chat. App only; see [Deployment](#deployment) |
 | `EMAIL_TRANSPORT` | Local testing only | Set to `console` to print emails even in a production build. Never set this on a real deployment |
 
 ---
@@ -249,6 +251,7 @@ MedAssist AI is built with HIPAA-conscious patterns. Real deployments still need
 - **Minimum necessary.** Admin screens show account and operational data only. Intake forms, symptoms, SOAP notes and prescriptions are never selected in admin queries.
 - **Account security**: required email verification, single-use one-hour reset links, sign-out everywhere on password reset or suspension, rate-limited auth endpoints, and server-assigned roles (clients can't set a role).
 - **Credential hygiene.** Staff accounts are created without a password, and the invitee chooses one through an emailed link.
+- **Private attachments.** Chat files live in a private bucket under random keys. Browsers upload with 5-minute signed URLs bound to one file's type and size, and every download goes through `/api/attachments/[id]`, which checks the viewer is in the conversation before redirecting to a 60-second signed link. Admins can't open attachments.
 
 ---
 
@@ -292,6 +295,14 @@ The app targets **Vercel + Neon**:
 3. Run migrations as part of your release (`npx prisma migrate deploy`).
 4. Configure email: either Resend (`RESEND_API_KEY`, `EMAIL_FROM` on a verified domain) or SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`; Gmail with an app password works). In production, the app refuses to silently skip auth emails.
 5. Deploy the Socket.IO server (`server.ts`) to a host that supports long-lived WebSocket connections (build: `npm install && npx prisma generate`, start: `npm run socket`). Give it `DATABASE_URL`, `NEXT_PUBLIC_APP_URL` (your app's URL, used for CORS) and `SOCKET_AUTH_SECRET`, then point `NEXT_PUBLIC_SOCKET_URL` on the app at it. The same `SOCKET_AUTH_SECRET` must be set on the app: the browser fetches a short-lived signed token from `/api/socket-token` and the socket server rejects connections without a valid one.
+6. Set up chat attachments (optional; chat works without it):
+   1. In Cloudflare, go to **R2** and create a bucket (keep public access **off**).
+   2. **R2 → Manage API tokens → Create API token** with *Object Read & Write* on that bucket. Copy the access key ID, secret access key and your account ID.
+   3. In the bucket's **Settings → CORS policy**, allow uploads from your app:
+      ```json
+      [{ "AllowedOrigins": ["https://your-app.vercel.app"], "AllowedMethods": ["PUT", "GET"], "AllowedHeaders": ["content-type"], "MaxAgeSeconds": 3600 }]
+      ```
+   4. Set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_BUCKET` on the app (Vercel) and redeploy.
 
 ---
 

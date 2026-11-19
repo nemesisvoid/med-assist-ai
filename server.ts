@@ -164,10 +164,12 @@ io.on('connection', rawSocket => {
 
   // ── Send a message ───────────────────────────────────────────────────────────
   // Any senderId/receiverId in the payload is ignored: the sender is the
-  // authenticated user and the receiver is the other participant.
-  socket.on('send_message', async (payload: { conversationId?: unknown; content?: unknown } = {}) => {
+  // authenticated user and the receiver is the other participant. An optional
+  // attachmentId must be a confirmed, unsent upload by this user in this conversation.
+  socket.on('send_message', async (payload: { conversationId?: unknown; content?: unknown; attachmentId?: unknown } = {}) => {
     const content = typeof payload.content === 'string' ? payload.content.trim() : '';
-    if (!content || content.length > MAX_MESSAGE_LENGTH) {
+    const attachmentId = isString(payload.attachmentId) ? payload.attachmentId : null;
+    if ((!content && !attachmentId) || content.length > MAX_MESSAGE_LENGTH) {
       socket.emit('error', { message: 'Invalid message.' });
       return;
     }
@@ -199,16 +201,38 @@ io.on('connection', rawSocket => {
 
       const receiverId = conversation.patientId === userId ? conversation.doctorId : conversation.patientId;
 
-      // Persist with the active appointmentId stamped on the message
-      const message = await prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          appointmentId: conversation.activeAppointmentId,
-          senderId: userId,
-          receiverId,
-          content,
-          isRead: false,
-        },
+      const attachment = attachmentId
+        ? await prisma.messageAttachment.findFirst({
+            where: { id: attachmentId, conversationId: conversation.id, uploaderId: userId, messageId: null, uploadedAt: { not: null } },
+            select: { id: true, fileName: true, mimeType: true, size: true },
+          })
+        : null;
+      if (attachmentId && !attachment) {
+        socket.emit('error', { message: 'Attachment not found. Please upload it again.' });
+        return;
+      }
+
+      // Persist with the active appointmentId stamped on the message, and link the attachment.
+      const message = await prisma.$transaction(async tx => {
+        const created = await tx.message.create({
+          data: {
+            conversationId: conversation.id,
+            appointmentId: conversation.activeAppointmentId,
+            senderId: userId,
+            receiverId,
+            content: content || null,
+            isRead: false,
+          },
+        });
+        if (attachment) {
+          // messageId: null in the filter makes the link one-time even under concurrent sends.
+          const linked = await tx.messageAttachment.updateMany({
+            where: { id: attachment.id, messageId: null },
+            data: { messageId: created.id },
+          });
+          if (linked.count !== 1) throw new Error('attachment already used');
+        }
+        return created;
       });
 
       // Touch conversation timestamp so sidebar sorting stays correct
@@ -228,6 +252,7 @@ io.on('connection', rawSocket => {
         createdAt: message.createdAt.toISOString(),
         isRead: message.isRead,
         messageStatus: message.messageStatus,
+        attachments: attachment ? [attachment] : [],
       });
     } catch (err) {
       console.error('[socket] Failed to save message:', err);

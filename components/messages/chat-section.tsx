@@ -4,7 +4,13 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
     ImageIcon, InfoIcon, SendIcon, VideoIcon, WifiOff,
     CalendarDays, ExternalLink, Lock, CheckCheck,
+    FileTextIcon, XIcon, Loader2Icon, DownloadIcon,
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { confirmAttachmentUpload, createAttachmentUpload } from '@/actions/message.action';
+import {
+    FILE_ACCEPT, IMAGE_ACCEPT, formatFileSize, isImageAttachment, validateAttachment, type AttachmentInfo,
+} from '@/lib/attachments';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { cn } from '@/lib/utils';
@@ -55,6 +61,10 @@ const ChatSection = ({ selectedConversationId, selectedConversation, userId, use
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const groupRefs = useRef<Map<string, HTMLDivElement>>(new Map());
     const [visibleGroupIndex, setVisibleGroupIndex] = useState(0);
+    const [pendingFile, setPendingFile] = useState<File | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const imageInputRef = useRef<HTMLInputElement>(null);
 
     const activeAppt = selectedConversation?.activeAppointment;
     const chatLocksAt = selectedConversation?.chatLocksAt ?? null;
@@ -99,7 +109,50 @@ const ChatSection = ({ selectedConversationId, selectedConversation, userId, use
     useEffect(() => {
         setInput('');
         setLocalTyping(false);
+        setPendingFile(null);
     }, [selectedConversationId]);
+
+    // ── Local preview for a selected image (released when it changes) ────────────
+    const previewUrl = useMemo(
+        () => (pendingFile && isImageAttachment(pendingFile.type) ? URL.createObjectURL(pendingFile) : null),
+        [pendingFile],
+    );
+    useEffect(() => () => {
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+    }, [previewUrl]);
+
+    const handleFilePicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = ''; // allow picking the same file again later
+        if (!file) return;
+        const problem = validateAttachment(file);
+        if (problem) {
+            toast.error(problem);
+            return;
+        }
+        setPendingFile(file);
+        textareaRef.current?.focus();
+    };
+
+    /** Uploads straight to private storage via a signed URL, then confirms it with the server. */
+    const uploadAttachment = async (file: File, conversationId: string): Promise<AttachmentInfo | null> => {
+        const slot = await createAttachmentUpload({ conversationId, fileName: file.name, mimeType: file.type, size: file.size });
+        if (!slot.success) {
+            toast.error(slot.message);
+            return null;
+        }
+        const put = await fetch(slot.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file }).catch(() => null);
+        if (!put?.ok) {
+            toast.error('The upload failed. Check your connection and try again.');
+            return null;
+        }
+        const confirmed = await confirmAttachmentUpload(slot.attachmentId);
+        if (!confirmed.success) {
+            toast.error(confirmed.message);
+            return null;
+        }
+        return confirmed.attachment;
+    };
 
     // ── Handle typing indicator ─────────────────────────────────────────────────
     const handleInputChange = (value: string) => {
@@ -116,15 +169,30 @@ const ChatSection = ({ selectedConversationId, selectedConversation, userId, use
     };
 
     // ── Send handler ────────────────────────────────────────────────────────────
-    const handleSend = useCallback(() => {
-        if (!input.trim()) return;
-        sendMessage(input);
+    const handleSend = useCallback(async () => {
+        if ((!input.trim() && !pendingFile) || isUploading || !selectedConversationId) return;
+
+        let attachment: AttachmentInfo | undefined;
+        if (pendingFile) {
+            setIsUploading(true);
+            try {
+                attachment = (await uploadAttachment(pendingFile, selectedConversationId)) ?? undefined;
+            } finally {
+                setIsUploading(false);
+            }
+            if (!attachment) return; // keep the text and file so the user can retry
+        }
+
+        sendMessage(input, attachment);
         setInput('');
+        setPendingFile(null);
         setLocalTyping(false);
         sendTyping(false);
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
         textareaRef.current?.focus();
-    }, [input, sendMessage, sendTyping]);
+    }, [input, pendingFile, isUploading, selectedConversationId, sendMessage, sendTyping]);
+
+    const canSend = (!!input.trim() || !!pendingFile) && isConnected && !isUploading;
 
     // ── Group messages by appointmentId for separators ─────────────────────────
     const messageGroups = useMemo(() => {
@@ -355,12 +423,56 @@ const ChatSection = ({ selectedConversationId, selectedConversation, userId, use
                         </div>
                     ) : (
                         <footer className='px-5 py-4 border-t border-slate-100 bg-white shrink-0'>
+                            {/* Selected attachment, shown before sending */}
+                            {pendingFile && (
+                                <div className='mb-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-2 pr-3'>
+                                    {previewUrl ? (
+                                        // eslint-disable-next-line @next/next/no-img-element -- local object URL preview
+                                        <img src={previewUrl} alt='' className='size-12 rounded-lg object-cover border border-slate-200' />
+                                    ) : (
+                                        <div className='size-12 rounded-lg bg-white border border-slate-200 flex items-center justify-center'>
+                                            <FileTextIcon size={20} className='text-slate-500' aria-hidden />
+                                        </div>
+                                    )}
+                                    <div className='min-w-0 flex-1'>
+                                        <p className='truncate text-sm font-semibold text-slate-800'>{pendingFile.name}</p>
+                                        <p className='text-xs text-slate-500'>
+                                            {isUploading ? 'Uploading securely…' : formatFileSize(pendingFile.size)}
+                                        </p>
+                                    </div>
+                                    {isUploading ? (
+                                        <Loader2Icon size={16} className='animate-spin text-blue-600' aria-label='Uploading' />
+                                    ) : (
+                                        <button
+                                            type='button'
+                                            onClick={() => setPendingFile(null)}
+                                            aria-label='Remove attachment'
+                                            className='size-8 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-slate-700 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500'>
+                                            <XIcon size={16} />
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                            <input ref={fileInputRef} type='file' accept={FILE_ACCEPT} className='hidden' onChange={handleFilePicked} />
+                            <input ref={imageInputRef} type='file' accept={IMAGE_ACCEPT} className='hidden' onChange={handleFilePicked} />
                             <div className='flex items-end gap-3'>
                                 <div className='flex items-center gap-1 pb-1'>
-                                    <button id='btn-attach-file' aria-label='Attach a file' className='w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500'>
+                                    <button
+                                        type='button'
+                                        id='btn-attach-file'
+                                        aria-label='Attach a file'
+                                        disabled={isUploading}
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className='w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all duration-150 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500'>
                                         <AttachIcon />
                                     </button>
-                                    <button id='btn-attach-image' aria-label='Attach an image' className='w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500'>
+                                    <button
+                                        type='button'
+                                        id='btn-attach-image'
+                                        aria-label='Attach an image'
+                                        disabled={isUploading}
+                                        onClick={() => imageInputRef.current?.click()}
+                                        className='w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all duration-150 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500'>
                                         <ImageIcon size={16} />
                                     </button>
                                 </div>
@@ -376,7 +488,7 @@ const ChatSection = ({ selectedConversationId, selectedConversation, userId, use
                                         onKeyDown={e => {
                                             if (e.key === 'Enter' && !e.shiftKey) {
                                                 e.preventDefault();
-                                                handleSend();
+                                                void handleSend();
                                             }
                                         }}
                                         aria-label='Type your message'
@@ -388,16 +500,16 @@ const ChatSection = ({ selectedConversationId, selectedConversation, userId, use
                                 <button
                                     id='btn-send-message'
                                     aria-label='Send message'
-                                    onClick={handleSend}
-                                    disabled={!input.trim() || !isConnected}
+                                    onClick={() => void handleSend()}
+                                    disabled={!canSend}
                                     className={cn(
                                         'w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
-                                        input.trim() && isConnected
+                                        canSend
                                             ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-blue-200 cursor-pointer'
                                             : 'bg-slate-100 text-slate-400 cursor-not-allowed',
                                     )}
                                 >
-                                    <SendIcon size={16} />
+                                    {isUploading ? <Loader2Icon size={16} className='animate-spin' /> : <SendIcon size={16} />}
                                 </button>
                             </div>
 
@@ -520,13 +632,56 @@ const MessageBubble = ({ message, currentUserId }: { message: SocketMessage; cur
                     ? 'bg-blue-600 text-white rounded-br-md'
                     : 'bg-white border border-slate-100 text-slate-800 rounded-bl-md',
             )}>
-                {message.content && <p>{message.content}</p>}
+                {message.attachments?.map(file => (
+                    <AttachmentView key={file.id} file={file} isMine={isMine} pending={message.id.startsWith('optimistic-')} />
+                ))}
+                {message.content && <p className='whitespace-pre-wrap break-words'>{message.content}</p>}
                 <p className={cn('text-[10px] mt-1 flex items-center justify-end gap-1', isMine ? 'text-blue-200' : 'text-slate-400')}>
                     {timeStr}
                     {isMine && <CheckCheck size={11} className={message.isRead ? 'text-blue-200' : 'text-blue-300/60'} />}
                 </p>
             </div>
         </div>
+    );
+};
+
+// ─── AttachmentView ───────────────────────────────────────────────────────────
+// Files are served through /api/attachments/[id], which checks the viewer is in
+// the conversation and redirects to a short-lived private storage link.
+
+const AttachmentView = ({ file, isMine, pending }: { file: AttachmentInfo; isMine: boolean; pending: boolean }) => {
+    const href = `/api/attachments/${file.id}`;
+
+    if (isImageAttachment(file.mimeType)) {
+        return (
+            <a href={href} target='_blank' rel='noopener noreferrer' className='block mb-1.5' aria-label={`Open image ${file.fileName}`}>
+                {/* eslint-disable-next-line @next/next/no-img-element -- private, auth-checked image; not optimisable by next/image */}
+                <img
+                    src={href}
+                    alt={file.fileName}
+                    loading='lazy'
+                    className={cn('max-h-64 max-w-full rounded-xl object-cover', pending && 'opacity-60')}
+                />
+            </a>
+        );
+    }
+
+    return (
+        <a
+            href={`${href}?download=1`}
+            className={cn(
+                'mb-1.5 flex items-center gap-3 rounded-xl px-3 py-2 transition-colors',
+                isMine ? 'bg-blue-500/60 hover:bg-blue-500' : 'bg-slate-50 border border-slate-100 hover:bg-slate-100',
+                pending && 'pointer-events-none opacity-60',
+            )}
+            aria-label={`Download ${file.fileName}`}>
+            <FileTextIcon size={20} className={isMine ? 'text-white' : 'text-slate-500'} aria-hidden />
+            <span className='min-w-0 flex-1'>
+                <span className='block truncate text-sm font-semibold'>{file.fileName}</span>
+                <span className={cn('block text-[11px]', isMine ? 'text-blue-100' : 'text-slate-500')}>{formatFileSize(file.size)}</span>
+            </span>
+            <DownloadIcon size={16} className={isMine ? 'text-blue-100' : 'text-slate-400'} aria-hidden />
+        </a>
     );
 };
 

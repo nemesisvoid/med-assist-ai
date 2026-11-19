@@ -111,17 +111,17 @@ model User {
   emailVerified Boolean   @default(false)
   image         String?
   role          Role      @default(PATIENT)
-  isOnline Boolean @default(false)
-  lastSeen DateTime?
+  isOnline      Boolean   @default(false)
+  lastSeen      DateTime?
 
   // Account suspension (managed by admins). Suspended users cannot create sessions.
   banned    Boolean   @default(false)
   banReason String?
   bannedAt  DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  sessions      Session[]
-  accounts      Account[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  sessions  Session[]
+  accounts  Account[]
 
   // Profiles
   patientProfile PatientProfile?
@@ -137,9 +137,10 @@ model User {
   // Clinical Notes
   createdClinicalNotes ClinicalNote[] @relation("DoctorClinicalNotes")
 
-  sentMessages     Message[] @relation("MessageSender")
-  receivedMessages Message[] @relation("MessageReceiver")
-  messages         Message[]
+  sentMessages        Message[]           @relation("MessageSender")
+  receivedMessages    Message[]           @relation("MessageReceiver")
+  uploadedAttachments MessageAttachment[] @relation("AttachmentUploader")
+  messages            Message[]
 
   patientConversations Conversation[] @relation("PatientConversations")
   doctorConversations  Conversation[] @relation("DoctorConversations")
@@ -347,7 +348,8 @@ model Conversation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  messages Message[]
+  messages    Message[]
+  attachments MessageAttachment[]
 
   patient           User         @relation("PatientConversations", fields: [patientId], references: [id], onDelete: Cascade)
   doctor            User         @relation("DoctorConversations", fields: [doctorId], references: [id], onDelete: Cascade)
@@ -382,9 +384,40 @@ model Message {
   conversation  Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   messageStatus MessageStatus @default(SENT)
 
+  attachments MessageAttachment[]
+
   @@index([senderId])
   @@index([receiverId])
   @@index([appointmentId])
+}
+
+/// A file shared in a conversation. The bytes live in private object storage
+/// (Cloudflare R2) under `storageKey`; they are only served through
+/// /api/attachments/[id], which checks the viewer is a participant.
+model MessageAttachment {
+  id String @id @default(cuid())
+
+  conversationId String
+  uploaderId     String
+  /// Set when the message carrying the file is sent; null while the upload is pending.
+  messageId      String?
+
+  storageKey String @unique
+  fileName   String
+  mimeType   String
+  size       Int
+
+  /// Set once the server has confirmed the object exists in storage.
+  uploadedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  uploader     User         @relation("AttachmentUploader", fields: [uploaderId], references: [id], onDelete: Cascade)
+  message      Message?     @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([messageId])
+  @@map("message_attachment")
 }
 
 model Notification {
