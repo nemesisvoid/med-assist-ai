@@ -321,11 +321,11 @@ export default function StartConversationDialog({
           )}
         </div>
 
-        {/* ── Footer HIPAA notice ──────────────────────────────────────── */}
+        {/* ── Footer privacy notice ────────────────────────────────────── */}
         <div className='px-6 py-3 border-t border-slate-100 bg-slate-50/70 flex items-center justify-center gap-1.5'>
           <ShieldCheck size={12} className='text-slate-400' />
           <p className='text-[11px] text-slate-400 text-center'>
-            All messages are encrypted and HIPAA-compliant
+            Messages are encrypted in transit and visible only to you and your care team
           </p>
         </div>
       </DialogContent>

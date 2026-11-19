@@ -317,7 +317,7 @@ const AuthForm = ({ initialMode = 'login', next, googleEnabled = false, initialE
           aria-hidden
         />
         <span className='text-[12px] leading-relaxed text-emerald-800'>
-          Your data is encrypted and <strong>HIPAA-compliant</strong>. We never share patient information with third parties.
+          Your information is encrypted in transit, visible only to your care team, and used only to provide your care. <strong>We never sell your data.</strong>
         </span>
       </div>
     </div>

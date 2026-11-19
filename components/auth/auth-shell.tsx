@@ -1,7 +1,7 @@
 import { HeartIcon, ShieldIcon, StarsIcon } from 'lucide-react';
 
 const features = [
-  { icon: ShieldIcon, label: 'Secure & HIPAA-compliant data protection' },
+  { icon: ShieldIcon, label: 'Private by design, with role-based access and audit logs' },
   { icon: StarsIcon, label: 'AI risk analysis on every appointment' },
   { icon: HeartIcon, label: 'Personalized, continuous health tracking' },
 ];

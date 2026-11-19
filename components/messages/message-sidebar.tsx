@@ -142,11 +142,11 @@ const MessageSidebar = ({
                     )}
                 </div>
 
-                {/* ── HIPAA footer ─────────────────────────────────────────────── */}
+                {/* ── Privacy footer ───────────────────────────────────────────── */}
                 <div className='px-4 py-3 border-t border-slate-100 bg-slate-50/60 flex items-center justify-center gap-1.5'>
                     <ShieldCheck size={11} className='text-slate-400' />
                     <p className='text-[11px] text-slate-400 text-center leading-relaxed'>
-                        Messages are encrypted &amp; HIPAA-compliant
+                        Messages are private to you and your care team
                     </p>
                 </div>
             </aside>
