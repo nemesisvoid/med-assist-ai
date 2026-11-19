@@ -13,9 +13,10 @@ import { useEffect, useState } from 'react';
 
 interface ConfirmProps {
   form: UseFormReturn<z.infer<typeof AppointmentFormSchema>>;
+  clinicName: string;
 }
 
-const Confirm = ({ form }: ConfirmProps) => {
+const Confirm = ({ form, clinicName }: ConfirmProps) => {
   const [selectedDoctor, setSelectedDoctor] = useState<Awaited<ReturnType<typeof getDoctorById>>>(null);
   const values = form.getValues();
 
@@ -54,6 +55,13 @@ const Confirm = ({ form }: ConfirmProps) => {
         <div className='flex justify-between border-b border-border-subtle pb-4'>
           <span className='text-text-muted text-sm'>Appointment Type</span>
           <span className='font-medium text-text-base'>{values.appointmentType || 'Not specified'}</span>
+        </div>
+
+        <div className='flex justify-between border-b border-border-subtle pb-4'>
+          <span className='text-text-muted text-sm'>How you’ll be seen</span>
+          <span className='font-medium text-text-base text-right'>
+            {values.visitMode === 'VIDEO' ? 'Video consultation' : `In person at ${clinicName}`}
+          </span>
         </div>
 
         <div className='flex justify-between border-b border-border-subtle pb-4'>

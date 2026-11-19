@@ -10,6 +10,9 @@ import { clinicalNotesSchema } from '@/schema/validators';
 import { AppointmentStatus } from '@/generated/prisma/enums';
 import { recordAudit } from '@/lib/audit';
 import { CHAT_LOCK_DAYS } from '@/lib/messaging-constants';
+import { clinicAddressLines, getClinicSettings } from '@/lib/clinic';
+import { VISIT_MODE_LABEL } from '@/lib/visit-mode';
+import type { VisitMode } from '@/generated/prisma/enums';
 import { isTherapySession, THERAPY_SOAP_GUIDANCE, THERAPY_SUMMARY_GUIDANCE } from '@/lib/ai-prompts';
 import type { ProviderType } from '@/generated/prisma/enums';
 import { aiFailure, generateJson, generateText } from '@/lib/ai';
@@ -701,6 +704,56 @@ export const sendPatientNotificationAction = async ({ appointmentId, message }: 
     if (failure) return failure;
     console.error('Error sending notification to patient:', error);
     return { success: false, message: 'Failed to send notification.' };
+  }
+};
+
+/**
+ * The assigned clinician switches how the patient will be seen (e.g. a high-risk
+ * video booking → in person). The patient is notified and the change is audited.
+ */
+export const changeVisitTypeAction = async (appointmentId: string, visitMode: VisitMode) => {
+  try {
+    if (visitMode !== 'IN_PERSON' && visitMode !== 'VIDEO') return { success: false, message: 'Choose a valid visit type.' };
+    const { session, appointment } = await requireAssignedDoctor(appointmentId, { requireOpen: true });
+
+    const current = await prisma.appointment.findUnique({ where: { id: appointment.id }, select: { visitMode: true } });
+    if (current?.visitMode === visitMode) return { success: true, message: 'Visit type unchanged.' };
+
+    const clinic = await getClinicSettings();
+    if ((visitMode === 'VIDEO' && !clinic.videoEnabled) || (visitMode === 'IN_PERSON' && !clinic.inPersonEnabled)) {
+      return { success: false, message: 'The clinic doesn’t offer that visit type right now (see Clinic settings).' };
+    }
+
+    await prisma.appointment.update({ where: { id: appointment.id }, data: { visitMode } });
+
+    const where = clinicAddressLines(clinic);
+    await createNotification({
+      userId: appointment.patientId,
+      type: 'APPOINTMENT',
+      title: visitMode === 'IN_PERSON' ? 'Your appointment is now in person' : 'Your appointment is now a video consultation',
+      message:
+        visitMode === 'IN_PERSON'
+          ? `Your clinician would like to see you in person for your ${appointment.appointmentType} appointment, at ${clinic.name}${where.length ? `, ${where.join(', ')}` : ''}.`
+          : `Your ${appointment.appointmentType} appointment will now be a video consultation. Join from the appointment page at your scheduled time.`,
+      link: `/patient/appointment/${appointment.id}`,
+    });
+
+    await recordAudit({
+      actorId: session.user.id,
+      action: 'APPOINTMENT_VISIT_TYPE_CHANGED',
+      entityType: 'Appointment',
+      entityId: appointment.id,
+      summary: `Changed visit type from ${VISIT_MODE_LABEL[current?.visitMode ?? 'IN_PERSON']} to ${VISIT_MODE_LABEL[visitMode]}`,
+    });
+
+    revalidatePath(`/doctor/appointment/${appointment.id}`);
+    revalidatePath(`/patient/appointment/${appointment.id}`);
+    return { success: true, message: `Changed to ${VISIT_MODE_LABEL[visitMode].toLowerCase()}. The patient has been notified.` };
+  } catch (error) {
+    const failure = authFailure(error);
+    if (failure) return failure;
+    console.error('Error changing visit type:', error);
+    return { success: false, message: 'Could not change the visit type.' };
   }
 };
 

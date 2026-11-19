@@ -50,6 +50,7 @@ const DoctorDashboardPage = async () => {
     patientName: item.patient.name,
     status: item.status,
     riskLevel: item.riskLevel ?? null,
+    visitMode: item.visitMode,
     scheduledDate: item.scheduledAt,
   }));
 
@@ -144,6 +145,7 @@ const DoctorDashboardPage = async () => {
                       intakeFormId: nextAppointment.intakeForm?.id ?? undefined,
                       status: nextAppointment.status,
                       riskLevel: nextAppointment.riskLevel ?? null,
+                      visitMode: nextAppointment.visitMode,
                     }}
                   />
                 ) : (

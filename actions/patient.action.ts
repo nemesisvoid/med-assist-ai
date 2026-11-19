@@ -80,6 +80,9 @@ export const createAppointment = async (formData: z.infer<typeof AppointmentForm
     if (!isSlotWithinHours(clinic.openingHours[weekdayOf(data.scheduledAt)], data.scheduledTime)) {
       return { success: false, message: 'The clinic is closed at that time. Please choose another time.' };
     }
+    if ((data.visitMode === 'VIDEO' && !clinic.videoEnabled) || (data.visitMode === 'IN_PERSON' && !clinic.inPersonEnabled)) {
+      return { success: false, message: 'That visit type isn’t offered right now. Please choose another.' };
+    }
 
     // "Any available" creates an unassigned appointment that an administrator assigns.
     const anyAvailable = data.doctor === ANY_AVAILABLE_CLINICIAN;
@@ -109,6 +112,7 @@ export const createAppointment = async (formData: z.infer<typeof AppointmentForm
         scheduledTime: data.scheduledTime,
         appointmentReason: data.appointmentReason,
         appointmentType: data.appointmentType,
+        visitMode: data.visitMode,
         doctorId: doctor?.id ?? null,
       },
     });

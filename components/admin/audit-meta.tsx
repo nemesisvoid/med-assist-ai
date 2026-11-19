@@ -44,6 +44,7 @@ export const AUDIT_ACTION_META: Record<AuditAction, { label: string; icon: Lucid
   MESSAGE_DELETED: { label: 'Message deleted', icon: Trash2Icon, tone: 'warning' },
   VIDEO_CALL_JOINED: { label: 'Video call joined', icon: VideoIcon, tone: 'neutral' },
   CLINIC_SETTINGS_UPDATED: { label: 'Clinic settings updated', icon: Building2Icon, tone: 'info' },
+  APPOINTMENT_VISIT_TYPE_CHANGED: { label: 'Visit type changed', icon: ShuffleIcon, tone: 'info' },
 };
 
 const toneStyles: Record<Tone, string> = {

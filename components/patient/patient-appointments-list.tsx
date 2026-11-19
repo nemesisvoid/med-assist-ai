@@ -10,6 +10,8 @@ import {
 import PatientAppointmentCard from './patient-appointment-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
+import type { VisitMode } from '@/generated/prisma/enums';
+
 export type PatientAppointmentItem = {
   appointmentId: string;
   scheduledAt: Date;
@@ -19,6 +21,7 @@ export type PatientAppointmentItem = {
   intakeFormId?: string | null;
   doctor?: string | null;
   status?: string | null;
+  visitMode?: VisitMode;
 };
 
 type PatientAppointmentsListProps = {
@@ -199,6 +202,7 @@ const PatientAppointmentsList = ({ appointments }: PatientAppointmentsListProps)
                   appointmentReason={item.appointmentReason}
                   intakeFormId={item.intakeFormId}
                   status={item.status}
+                  visitMode={item.visitMode}
                 />
               ))}
             </div>
@@ -244,6 +248,7 @@ const PatientAppointmentsList = ({ appointments }: PatientAppointmentsListProps)
                       appointmentReason={item.appointmentReason}
                       intakeFormId={item.intakeFormId}
                       status={item.status}
+                      visitMode={item.visitMode}
                     />
                   </div>
                 );

@@ -30,3 +30,8 @@ Use non-diagnostic, person-centred language. Do not recommend medications.
 export const THERAPY_SUMMARY_GUIDANCE = `
 This was a therapy session with a licensed therapist. Use gentle, non-stigmatising language and refer to the clinician as "your therapist", never "your doctor". If the plan mentions safety steps or crisis resources, state them clearly.
 `;
+
+export const VIDEO_VISIT_TRIAGE_GUIDANCE = `
+--- VISIT TYPE: VIDEO CONSULTATION ---
+The patient booked a video (remote) consultation. If the presentation likely needs a physical examination, tests or urgent in-person care, say so explicitly at the start of "aiRecommendation" (e.g. "Recommend converting to an in-person visit: ...").
+`;

@@ -1,5 +1,8 @@
 'use client';
 
+import VisitModeBadge from '@/components/shared/visit-mode-badge';
+import type { VisitMode } from '@/generated/prisma/enums';
+
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { format, isToday, isTomorrow, formatDistanceToNow, isFuture, isPast } from 'date-fns';
@@ -39,6 +42,7 @@ export type DoctorAppointmentItem = {
   intakeFormId: string | undefined;
   status: AppointmentStatus;
   riskLevel: RiskLevel | null;
+  visitMode: VisitMode;
 };
 
 type FilterStatus = 'ALL' | AppointmentStatus;
@@ -203,6 +207,7 @@ const TriageRow = ({ item, index }: { item: DoctorAppointmentItem; index: number
           <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', riskCfg.dot)} aria-hidden='true' />
           {riskCfg.label}
         </span>
+        <VisitModeBadge mode={item.visitMode} />
       </div>
 
       {/* ── Action ───────────────────────────────────────────────────── */}
@@ -357,6 +362,7 @@ const AppointmentCard = ({ item }: { item: DoctorAppointmentItem }) => {
               <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', riskCfg.dot)} aria-hidden='true' />
               {item.riskLevel ? `${riskCfg.label} Risk` : 'Risk not assessed'}
             </span>
+            <VisitModeBadge mode={item.visitMode} />
           </div>
         </div>
       </div>

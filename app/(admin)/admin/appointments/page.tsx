@@ -1,3 +1,4 @@
+import VisitModeBadge from '@/components/shared/visit-mode-badge';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { CalendarIcon, UserRoundSearchIcon } from 'lucide-react';
@@ -141,6 +142,7 @@ const AppointmentsPage = async ({ searchParams }: { searchParams: SearchParams }
                       className='inline-flex rounded-full transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600'>
                       <AppointmentStatusBadge status={a.status} />
                     </Link>
+                    <VisitModeBadge mode={a.visitMode} className='mt-1 flex w-fit' />
                   </TableCell>
                   <TableCell className='hidden sm:table-cell'>
                     <PriorityBadge priority={a.priority} />

@@ -14,7 +14,8 @@ import * as z from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createNotification } from '@/lib/notifications';
 import { AIServiceError, generateJson, logAIError, toAIServiceError } from '@/lib/ai';
-import { isTherapySession, THERAPY_TRIAGE_GUIDANCE } from '@/lib/ai-prompts';
+import { isTherapySession, THERAPY_TRIAGE_GUIDANCE, VIDEO_VISIT_TRIAGE_GUIDANCE } from '@/lib/ai-prompts';
+import { isHighRiskVideoVisit } from '@/lib/visit-mode';
 
 const TriageSchema = z.object({
   riskLevel: z.enum(['LOW', 'MEDIUM', 'HIGH']),
@@ -76,7 +77,7 @@ Allergies: ${appointment.intakeForm.allergies ?? 'None noted'}
 Medications: ${appointment.intakeForm.medications ?? 'None noted'}
 Medical History: ${appointment.patient.patientProfile?.medicalHistory ?? 'None provided'}
 
-${isTherapySession(appointment.doctor?.doctorProfile?.providerType) ? THERAPY_TRIAGE_GUIDANCE : ''}
+${isTherapySession(appointment.doctor?.doctorProfile?.providerType) ? THERAPY_TRIAGE_GUIDANCE : ''}${appointment.visitMode === 'VIDEO' ? VIDEO_VISIT_TRIAGE_GUIDANCE : ''}
 --- INSTRUCTIONS ---
 - Cross-reference current symptoms and chief complaints against any listed Allergies, Medications, and Medical History to spot contraindications or hidden complications.
 - Keep the "aiRiskSummary" clinical,objective, concise (2-3 sentences), and free of conversational filler.
@@ -162,6 +163,17 @@ Return ONLY a valid JSON object matching this exact format schema without markdo
       title: notificationTitle,
       message: notificationMessage,
     });
+
+    // A serious case booked as a video visit may need to be seen in person.
+    if (isHighRiskVideoVisit({ visitMode: appointment.visitMode, ...parsed })) {
+      await createNotification({
+        userId: appointment.doctorId,
+        type: 'APPOINTMENT',
+        title: 'Video visit flagged: consider seeing in person',
+        message: `${appointment.patient.name || 'A patient'} booked a video consultation, but AI triage rated it ${parsed.priority.toLowerCase()} priority. Consider switching it to an in-person visit from the appointment page.`,
+        link: `/doctor/appointment/${appointment.id}`,
+      });
+    }
   }
 
   return { ok: true };

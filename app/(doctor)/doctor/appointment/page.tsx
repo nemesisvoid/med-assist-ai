@@ -20,6 +20,7 @@ const DoctorAppointmentPage = async () => {
     status: item.status,
     title: item.title,
     riskLevel: item.riskLevel ?? null,
+    visitMode: item.visitMode,
   }));
 
   return (

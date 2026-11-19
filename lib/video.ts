@@ -11,8 +11,10 @@ import { AccessToken } from 'livekit-server-sdk';
 
 const TOKEN_TTL = '1h';
 
-export const isVideoConfigured = () =>
-  !!(process.env.LIVEKIT_API_KEY && process.env.LIVEKIT_API_SECRET && process.env.NEXT_PUBLIC_LIVEKIT_URL);
+/** LiveKit server URL (wss://…). LiveKit's dashboard calls it LIVEKIT_URL, so both names are accepted. */
+export const liveKitUrl = () => process.env.LIVEKIT_URL || process.env.NEXT_PUBLIC_LIVEKIT_URL || '';
+
+export const isVideoConfigured = () => !!(process.env.LIVEKIT_API_KEY && process.env.LIVEKIT_API_SECRET && liveKitUrl());
 
 export const videoRoomName = (appointmentId: string) => `appt_${appointmentId}`;
 
