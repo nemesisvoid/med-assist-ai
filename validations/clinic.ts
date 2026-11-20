@@ -9,7 +9,7 @@ const optionalText = (max: number) =>
     .transform(v => (v === '' ? null : v))
     .nullable();
 
-const dayHours = z
+export const dayHoursSchema = z
   .object({ open: z.string(), close: z.string() })
   .nullable()
   .refine(v => v === null || (isValidTime(v.open) && isValidTime(v.close)), { message: 'Use times like 09:00' })
@@ -48,7 +48,7 @@ export const ClinicSettingsSchema = z
       .refine(v => v === null || /^https:\/\/\S+$/i.test(v), { message: 'Use a full https:// link' }),
     arrivalInstructions: optionalText(500),
     timezone: z.string().refine(isKnownTimezone, { message: 'Choose a valid timezone' }),
-    openingHours: z.object(Object.fromEntries(WEEKDAYS.map(d => [d, dayHours])) as Record<(typeof WEEKDAYS)[number], typeof dayHours>),
+    openingHours: z.object(Object.fromEntries(WEEKDAYS.map(d => [d, dayHoursSchema])) as Record<(typeof WEEKDAYS)[number], typeof dayHoursSchema>),
     inPersonEnabled: z.boolean(),
     videoEnabled: z.boolean(),
     emergencyNumber: z

@@ -102,3 +102,30 @@ export function todayInTimezone(timezone: string, now = new Date()): string {
 
 /** "yyyy-mm-dd" of a booking date (stored as UTC midnight of the chosen day). */
 export const bookingDateKey = (date: Date) => date.toISOString().slice(0, 10);
+
+/** Milliseconds the timezone is ahead of UTC at a given instant. */
+function timezoneOffsetMs(instant: number, timezone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(new Date(instant));
+  const get = (type: string) => Number(parts.find(p => p.type === type)?.value ?? 0);
+  return Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second')) - instant;
+}
+
+/** The exact moment a clinic-local date ("yyyy-mm-dd") and time ("HH:MM") happen. Handles DST. */
+export function clinicLocalToUtc(dateKey: string, time24: string, timezone: string): Date {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const [h, min] = time24.split(':').map(Number);
+  const asIfUtc = Date.UTC(y, m - 1, d, h, min);
+  let utc = asIfUtc - timezoneOffsetMs(asIfUtc, timezone);
+  const corrected = asIfUtc - timezoneOffsetMs(utc, timezone);
+  if (corrected !== utc) utc = corrected;
+  return new Date(utc);
+}

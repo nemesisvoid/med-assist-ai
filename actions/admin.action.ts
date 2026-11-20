@@ -23,6 +23,8 @@ import {
 } from '@/validations/admin';
 import { ClinicSettingsSchema, type ClinicSettingsInput } from '@/validations/clinic';
 import { CLINIC_SETTINGS_ID, getClinicSettings } from '@/lib/clinic';
+import { SlotUnavailableError, assertSlotBookable, getSlotAvailability, toBookingDate } from '@/lib/scheduling';
+import { bookingDateKey } from '@/lib/clinic-hours';
 
 export type ActionResult = { ok: true; message: string } | { ok: false; error: string };
 
@@ -286,7 +288,7 @@ export async function reassignAppointment(input: z.input<typeof ReassignAppointm
     const { appointmentId, doctorId } = ReassignAppointmentSchema.parse(input);
 
     const [appointment, doctor] = await Promise.all([
-      prisma.appointment.findUnique({ where: { id: appointmentId }, select: { status: true, doctorId: true, patientId: true, scheduledAt: true } }),
+      prisma.appointment.findUnique({ where: { id: appointmentId }, select: { status: true, doctorId: true, patientId: true, scheduledAt: true, scheduledTime: true } }),
       prisma.user.findFirst({ where: { id: doctorId, role: 'DOCTOR', banned: false, accounts: { some: {} } }, select: { id: true, name: true } }),
     ]);
     if (!appointment) return fail('Appointment not found.');
@@ -294,11 +296,28 @@ export async function reassignAppointment(input: z.input<typeof ReassignAppointm
     if (!doctor) return fail('Choose an active doctor who has accepted their invitation.');
     if (appointment.doctorId === doctorId) return fail('This doctor is already assigned.');
 
-    await prisma.$transaction([
-      prisma.appointment.update({ where: { id: appointmentId }, data: { doctorId } }),
-      // The chat thread is tied to the patient/doctor pair, so detach it from the previous doctor's conversation.
-      prisma.conversation.updateMany({ where: { activeAppointmentId: appointmentId }, data: { activeAppointmentId: null } }),
-    ]);
+    try {
+      await prisma.$transaction(async tx => {
+        // The new clinician must be working then and not already booked at that time.
+        if (appointment.scheduledTime) {
+          await assertSlotBookable(tx, {
+            doctorId,
+            date: toBookingDate(bookingDateKey(appointment.scheduledAt)),
+            time: appointment.scheduledTime,
+            excludeAppointmentId: appointmentId,
+            ignorePast: true,
+          });
+        }
+        await tx.appointment.update({ where: { id: appointmentId }, data: { doctorId } });
+        // The chat thread is tied to the patient/doctor pair, so detach it from the previous doctor's conversation.
+        await tx.conversation.updateMany({ where: { activeAppointmentId: appointmentId }, data: { activeAppointmentId: null } });
+      });
+    } catch (error) {
+      if (error instanceof SlotUnavailableError) {
+        return fail(`${doctor.name} can’t take this appointment: they’re already booked or not working at that time.`);
+      }
+      throw error;
+    }
 
     const when = appointment.scheduledAt.toLocaleDateString('en-US', { dateStyle: 'medium' });
     await Promise.all([
@@ -411,4 +430,45 @@ export async function updateClinicSettings(input: ClinicSettingsInput) {
     revalidatePath('/', 'layout');
     return { ok: true, message: 'Clinic settings saved.' };
   });
+}
+
+// ─── Reassign dialog: who is free at this appointment's time ───────────────────
+
+export type ReassignAvailability =
+  | { ok: true; slotLabel: string | null; unavailable: Record<string, 'booked' | 'off'> }
+  | { ok: false; error: string };
+
+/** For each assignable clinician, whether they're booked or not working at this appointment's slot. */
+export async function getReassignAvailability(appointmentId: string): Promise<ReassignAvailability> {
+  try {
+    await requireAdmin();
+    const appointment = await prisma.appointment.findUnique({
+      where: { id: String(appointmentId ?? '') },
+      select: { scheduledAt: true, scheduledTime: true },
+    });
+    if (!appointment) return { ok: false, error: 'Appointment not found.' };
+    if (!appointment.scheduledTime) return { ok: true, slotLabel: null, unavailable: {} };
+
+    const date = toBookingDate(bookingDateKey(appointment.scheduledAt));
+    const clinicians = await prisma.user.findMany({
+      where: { role: 'DOCTOR', banned: false, doctorProfile: { isNot: null }, accounts: { some: {} } },
+      select: { id: true },
+    });
+    const unavailable: Record<string, 'booked' | 'off'> = {};
+    await Promise.all(
+      clinicians.map(async ({ id }) => {
+        const day = await getSlotAvailability({ doctorId: id, date, excludeAppointmentId: appointmentId, ignorePast: true });
+        const slot = day.slots.find(s => s.time === appointment.scheduledTime);
+        if (!slot) unavailable[id] = 'off';
+        else if (slot.status === 'booked') unavailable[id] = 'booked';
+      }),
+    );
+
+    const slotLabel = `${new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(date)} at ${appointment.scheduledTime}`;
+    return { ok: true, slotLabel, unavailable };
+  } catch (error) {
+    if (error instanceof AuthorizationError) return { ok: false, error: error.message };
+    console.error('[getReassignAvailability]', error);
+    return { ok: false, error: 'Could not check availability.' };
+  }
 }

@@ -15,6 +15,7 @@ import {
   Building2Icon,
   StethoscopeIcon,
   UsersIcon,
+  UserRoundIcon,
 } from 'lucide-react';
 
 export const patientSidebarLinks = [
@@ -55,6 +56,11 @@ export const doctorSidebarLinks = [
     name: 'Notifications',
     href: '/doctor/notification',
     icon: BellIcon,
+  },
+  {
+    name: 'My profile',
+    href: '/doctor/profile',
+    icon: UserRoundIcon,
   },
   {
     name: 'Messages',

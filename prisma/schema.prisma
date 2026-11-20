@@ -106,6 +106,8 @@ enum AuditAction {
   VIDEO_CALL_JOINED
   CLINIC_SETTINGS_UPDATED
   APPOINTMENT_VISIT_TYPE_CHANGED
+  APPOINTMENT_RESCHEDULED
+  CLINICIAN_PROFILE_UPDATED
   DOCTOR_AVAILABILITY_CHANGED
   APPOINTMENT_REASSIGNED
   APPOINTMENT_CANCELLED
@@ -206,6 +208,10 @@ model DoctorProfile {
 
   availabilityStatus DoctorAvailabilityStatus @default(AVAILABLE)
 
+  /// The clinician's own weekly hours ({ mon: { open, close } | null, ... }); null follows the clinic's hours.
+  /// Bookable times are the overlap of these and the clinic's opening hours.
+  workingHours Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -267,6 +273,7 @@ model Appointment {
   @@index([status])
   @@index([priority])
   @@index([scheduledAt])
+  @@index([doctorId, scheduledAt])
 }
 
 model IntakeForm {
@@ -497,6 +504,9 @@ model Notification {
   entityId  String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Idempotency key for system-generated notifications (e.g. appointment reminders), so they're created once.
+  dedupeKey String? @unique
 
   @@index([userId])
 }

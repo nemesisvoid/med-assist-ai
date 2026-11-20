@@ -36,6 +36,7 @@ import {
   applySoapDraftAction,
 } from '@/actions/doctor.action';
 import VisitModeBadge from '@/components/shared/visit-mode-badge';
+import RescheduleDialog from '@/components/shared/reschedule-dialog';
 import { isHighRiskVideoVisit } from '@/lib/visit-mode';
 import { cn, formatEnums, formatRiskLabel, hasSavedClinicalNote, getAppointmentStatusStyle, getPriorityStyle, getRiskLevelStyle, formatDoctorName } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -369,6 +370,15 @@ export default function DoctorAppointmentDetails({ appointment: initialAppointme
             </div>
 
             <div className='flex flex-wrap items-center gap-2 w-full md:w-auto'>
+              {isOpenAppointment && (
+                <RescheduleDialog
+                  appointmentId={appointment.id}
+                  otherPartyName={appointment.patient.name}
+                  currentLabel={`${new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(appointment.scheduledAt))}${appointment.scheduledTime ? ` at ${appointment.scheduledTime}` : ''}`}
+                  triggerClassName='flex-1 md:flex-none'
+                  onRescheduled={() => void refreshAppointmentState()}
+                />
+              )}
               {isOpenAppointment && (
                 <Button
                   type='button'
