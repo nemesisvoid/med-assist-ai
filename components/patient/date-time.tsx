@@ -1,12 +1,13 @@
 import * as z from 'zod';
-import { useEffect, useMemo } from 'react';
+import { useCallback } from 'react';
 import { Controller, UseFormReturn } from 'react-hook-form';
 import { format } from 'date-fns';
 
 import { Input } from '@/components/ui/input';
 import { CalendarIcon, ClockIcon, InfoIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { WEEKDAYS, WEEKDAY_LABELS, formatDayHours, slotsForDay, weekdayOf, type OpeningHours } from '@/lib/clinic-hours';
+import { WEEKDAYS, WEEKDAY_LABELS, type OpeningHours } from '@/lib/clinic-hours';
+import SlotPicker from '@/components/shared/slot-picker';
 
 import { AppointmentFormSchema } from '@/validations/validation';
 
@@ -20,15 +21,11 @@ interface DateTimeTypeProps {
 const DateTime = ({ form, openingHours, timezone }: DateTimeTypeProps) => {
   const scheduledAt = form.watch('scheduledAt');
   const scheduledTime = form.watch('scheduledTime');
+  const doctor = form.watch('doctor');
 
-  const day = scheduledAt instanceof Date && !isNaN(scheduledAt.getTime()) ? weekdayOf(scheduledAt) : null;
-  const slots = useMemo(() => (day ? slotsForDay(openingHours[day]) : []), [day, openingHours]);
+  const dateKey = scheduledAt instanceof Date && !isNaN(scheduledAt.getTime()) ? scheduledAt.toISOString().slice(0, 10) : '';
   const openDays = WEEKDAYS.filter(d => openingHours[d]).map(d => WEEKDAY_LABELS[d]);
-
-  // A time chosen for another day may not exist on the newly chosen one.
-  useEffect(() => {
-    if (scheduledTime && day && !slots.includes(scheduledTime)) form.setValue('scheduledTime', '');
-  }, [day, slots, scheduledTime, form]);
+  const setTime = useCallback((time: string) => form.setValue('scheduledTime', time, { shouldValidate: !!time }), [form]);
 
   return (
     <div className='animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-2xl mx-auto'>
@@ -66,37 +63,8 @@ const DateTime = ({ form, openingHours, timezone }: DateTimeTypeProps) => {
           <p className='flex items-center gap-2 text-sm font-medium text-text-base mb-3'>
             <ClockIcon size={16} className='text-accent-primary' /> Select Time
           </p>
-          {!day ? (
-            <p className='rounded-lg border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-text-muted'>Choose a date to see available times.</p>
-          ) : slots.length === 0 ? (
-            <p className='rounded-lg border border-amber-200 bg-amber-50 px-4 py-6 text-center text-sm text-amber-800'>
-              The clinic is closed on {WEEKDAY_LABELS[day]}s. Please choose another day.
-            </p>
-          ) : (
-            <>
-              <p className='mb-2 text-xs text-text-muted'>
-                {WEEKDAY_LABELS[day]}: {formatDayHours(openingHours[day])}
-              </p>
-              <div role='radiogroup' aria-label='Available times' className='grid grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-2 custom-scrollbar'>
-                {slots.map(time => (
-                  <button
-                    key={time}
-                    type='button'
-                    role='radio'
-                    aria-checked={scheduledTime === time}
-                    className={cn(
-                      'py-2 px-3 text-sm rounded-lg border text-center transition-colors cursor-pointer',
-                      scheduledTime === time
-                        ? 'border-accent-primary bg-accent-primary text-white'
-                        : 'border-[var(--color-border-subtle)] bg-white text-[var(--color-text-base)] hover:border-[var(--color-accent-primary)] hover:text-[var(--color-accent-primary)]',
-                    )}
-                    onClick={() => form.setValue('scheduledTime', time, { shouldValidate: true })}>
-                    {time}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
+          {/* Slots come from the server: clinic hours, the clinician's own hours and existing bookings. */}
+          <SlotPicker dateKey={dateKey} doctorId={doctor || undefined} value={scheduledTime} onChange={setTime} />
         </div>
       </div>
     </div>

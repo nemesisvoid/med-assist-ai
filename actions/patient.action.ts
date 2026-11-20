@@ -17,7 +17,8 @@ import { after } from 'next/server';
 import { runTriage } from '@/lib/triage';
 import { ANY_AVAILABLE_CLINICIAN } from '@/constants/booking';
 import { getClinicSettings } from '@/lib/clinic';
-import { bookingDateKey, isSlotWithinHours, todayInTimezone, weekdayOf } from '@/lib/clinic-hours';
+import { bookingDateKey, todayInTimezone } from '@/lib/clinic-hours';
+import { SlotUnavailableError, assertSlotBookable, toBookingDate } from '@/lib/scheduling';
 import { authFailure, getSessionWithRole, requireAppointmentPatient, requireRole } from '@/lib/authz';
 
 export const getPatientProfile = async () => {
@@ -72,13 +73,9 @@ export const createAppointment = async (formData: z.infer<typeof AppointmentForm
     if (!validatedData.success) return { success: false, message: 'Please check the form and try again.' };
     const { data } = validatedData;
 
-    // Enforced here, not only in the booking screen: within opening hours, not in the past.
     const clinic = await getClinicSettings();
     if (bookingDateKey(data.scheduledAt) < todayInTimezone(clinic.timezone)) {
       return { success: false, message: 'Please choose a date from today onwards.' };
-    }
-    if (!isSlotWithinHours(clinic.openingHours[weekdayOf(data.scheduledAt)], data.scheduledTime)) {
-      return { success: false, message: 'The clinic is closed at that time. Please choose another time.' };
     }
     if ((data.visitMode === 'VIDEO' && !clinic.videoEnabled) || (data.visitMode === 'IN_PERSON' && !clinic.inPersonEnabled)) {
       return { success: false, message: 'That visit type isn’t offered right now. Please choose another.' };
@@ -105,16 +102,22 @@ export const createAppointment = async (formData: z.infer<typeof AppointmentForm
       if (active) return { success: false, message: 'You already have an open appointment with this clinician.' };
     }
 
-    const res = await prisma.appointment.create({
+    // Within clinic and clinician hours, not in the past, and the clinician isn't already
+    // booked at that time; checked under a lock so the same slot can't be taken twice.
+    const scheduledAt = toBookingDate(bookingDateKey(data.scheduledAt));
+    const res = await prisma.$transaction(async tx => {
+      await assertSlotBookable(tx, { doctorId: doctor?.id ?? null, date: scheduledAt, time: data.scheduledTime });
+      return tx.appointment.create({
       data: {
         patientId,
-        scheduledAt: data.scheduledAt,
+        scheduledAt,
         scheduledTime: data.scheduledTime,
         appointmentReason: data.appointmentReason,
         appointmentType: data.appointmentType,
         visitMode: data.visitMode,
         doctorId: doctor?.id ?? null,
       },
+      });
     });
 
     await createNotification({
@@ -140,6 +143,7 @@ export const createAppointment = async (formData: z.infer<typeof AppointmentForm
 
     return { success: true, message: 'Appointment created successfully' };
   } catch (error) {
+    if (error instanceof SlotUnavailableError) return { success: false, message: error.message };
     const failure = authFailure(error);
     if (failure) return failure;
     console.error('Error creating appointment:', error);

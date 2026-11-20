@@ -4,6 +4,7 @@ import { formatDoctorName } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { Calendar, User, ShieldCheck, ArrowRight, Video, MapPin, ExternalLink, Phone } from 'lucide-react';
 import VisitModeBadge from '@/components/shared/visit-mode-badge';
+import RescheduleDialog from '@/components/shared/reschedule-dialog';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -138,9 +139,19 @@ export default function PatientAppointmentSidebar({ appointment, clinic, isCompl
       {/* ── APPOINTMENT DETAILS ───────────────────────────────────── */}
       <Card className='shadow-sm border-slate-100 overflow-hidden'>
         <CardHeader className='bg-slate-50/60 border-b border-slate-100 px-4 py-3.5'>
-          <div className='flex items-center gap-2'>
-            <Calendar className='size-4 text-slate-500' />
-            <span className='text-xs font-bold text-slate-700 uppercase tracking-wider'>Appointment Details</span>
+          <div className='flex items-center justify-between gap-2'>
+            <div className='flex items-center gap-2'>
+              <Calendar className='size-4 text-slate-500' />
+              <span className='text-xs font-bold text-slate-700 uppercase tracking-wider'>Appointment Details</span>
+            </div>
+            {!isCompleted && !isCancelled && (
+              <RescheduleDialog
+                appointmentId={appointment.id}
+                otherPartyName={doctor ? formatDoctorName(doctor.name, doctorProfile) : null}
+                currentLabel={`${new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(appointment.scheduledAt))}${appointment.scheduledTime ? ` at ${appointment.scheduledTime}` : ''}`}
+                triggerClassName='h-7 px-2.5 text-xs'
+              />
+            )}
           </div>
         </CardHeader>
         <CardContent className='p-4 space-y-3'>
