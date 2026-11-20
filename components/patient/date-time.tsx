@@ -5,7 +5,6 @@ import { format } from 'date-fns';
 
 import { Input } from '@/components/ui/input';
 import { CalendarIcon, ClockIcon, InfoIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { WEEKDAYS, WEEKDAY_LABELS, type OpeningHours } from '@/lib/clinic-hours';
 import SlotPicker from '@/components/shared/slot-picker';
 

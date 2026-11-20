@@ -28,9 +28,10 @@ export default function SlotPicker({
   value: string;
   onChange: (time: string) => void;
 }) {
-  const [state, setState] = useState<{ key: string; loading: boolean; availability: SlotAvailability | null; error: string | null }>({
+  // The result is tagged with the request it answers; while it doesn't match the
+  // current request, the picker shows "Checking availability…".
+  const [state, setState] = useState<{ key: string; availability: SlotAvailability | null; error: string | null }>({
     key: '',
-    loading: false,
     availability: null,
     error: null,
   });
@@ -39,11 +40,10 @@ export default function SlotPicker({
   useEffect(() => {
     if (!dateKey) return;
     let cancelled = false;
-    setState(s => ({ ...s, key: requestKey, loading: true, error: null }));
     getAvailableSlots({ date: dateKey, doctorId, appointmentId }).then(res => {
       if (cancelled) return;
-      if (res.success) setState({ key: requestKey, loading: false, availability: res.availability, error: null });
-      else setState({ key: requestKey, loading: false, availability: null, error: res.message });
+      if (res.success) setState({ key: requestKey, availability: res.availability, error: null });
+      else setState({ key: requestKey, availability: null, error: res.message });
     });
     return () => {
       cancelled = true;
@@ -60,7 +60,7 @@ export default function SlotPicker({
   if (!dateKey) {
     return <p className='rounded-lg border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500'>Choose a date to see available times.</p>;
   }
-  if (state.loading || state.key !== requestKey) {
+  if (state.key !== requestKey) {
     return (
       <p className='flex items-center justify-center gap-2 rounded-lg border border-slate-100 px-4 py-6 text-sm text-slate-500'>
         <LoaderIcon className='size-4 animate-spin' aria-hidden /> Checking availability…
