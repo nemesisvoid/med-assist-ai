@@ -27,7 +27,7 @@ import {
   PriorityBadge,
   UserAvatar,
 } from '@/components/admin/admin-ui';
-import { AuditActionIcon, AUDIT_ACTION_META } from '@/components/admin/audit-meta';
+import { AuditActionIcon, getAuditMeta } from '@/components/admin/audit-meta';
 import { AppointmentDetailActions } from '@/components/admin/appointment-actions';
 import { getAppointmentDetail, getAssignableDoctors, OPEN_APPOINTMENT_STATUSES } from '@/lib/data/admin';
 import { requireAdminPage } from '@/lib/authz';
@@ -324,7 +324,7 @@ const AppointmentDetailPage = async ({ params }: { params: Promise<{ id: string 
                     <AuditActionIcon action={event.action} />
                     <div className='min-w-0 flex-1'>
                       <p className='text-sm text-slate-700'>
-                        <span className='font-semibold text-slate-900'>{AUDIT_ACTION_META[event.action].label}</span>
+                        <span className='font-semibold text-slate-900'>{getAuditMeta(event.action).label}</span>
                         {event.actor && <span className='text-slate-500'> by {event.actor.name}</span>}
                       </p>
                       <p className='text-xs text-slate-500'>{event.summary}</p>

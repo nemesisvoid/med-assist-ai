@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { ScrollTextIcon, ShieldCheckIcon } from 'lucide-react';
 
 import { describeUserAgent, EmptyState, formatDateTime, PageHeader, RoleBadge } from '@/components/admin/admin-ui';
-import { AUDIT_ACTION_META, AuditActionBadge } from '@/components/admin/audit-meta';
+import { AUDIT_ACTION_META, getAuditMeta, AuditActionBadge } from '@/components/admin/audit-meta';
 import { ClearFilters, FilterBar, SearchFilter, SelectFilter } from '@/components/admin/admin-filters';
 import Pagination from '@/components/admin/pagination';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -45,7 +45,7 @@ const AuditLogPage = async ({ searchParams }: { searchParams: Promise<{ q?: stri
           <SelectFilter
             param='action'
             label='Event'
-            options={ACTIONS.map(a => ({ value: a, label: AUDIT_ACTION_META[a].label }))}
+            options={ACTIONS.map(a => ({ value: a, label: getAuditMeta(a).label }))}
           />
           <ClearFilters params={['q', 'action']} />
         </FilterBar>

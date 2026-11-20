@@ -16,6 +16,15 @@ const FIELD_LABELS: Record<string, string> = {
   workingHours: 'working hours',
 };
 
+/**
+ * JSON with object keys sorted, so values compare equal regardless of key order
+ * (Postgres `jsonb` reorders keys, e.g. working hours come back as fri, mon, sat…).
+ */
+const stableJson = (value: unknown): string =>
+  JSON.stringify(value ?? null, (_key, v: unknown) =>
+    v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v,
+  );
+
 /** A clinician updates their own profile and working hours. Every change is audit-logged. */
 export const updateMyClinicianProfile = async (input: ClinicianProfileInput) => {
   try {
@@ -28,7 +37,7 @@ export const updateMyClinicianProfile = async (input: ClinicianProfileInput) => 
     if (!current) return { success: false as const, message: 'Your clinician profile hasn’t been set up yet. Contact an administrator.' };
 
     const changed = (Object.keys(FIELD_LABELS) as (keyof typeof data)[])
-      .filter(key => JSON.stringify(data[key] ?? null) !== JSON.stringify((current as Record<string, unknown>)[key] ?? null))
+      .filter(key => stableJson(data[key]) !== stableJson((current as Record<string, unknown>)[key]))
       .map(key => FIELD_LABELS[key]);
     if (changed.length === 0) return { success: true as const, message: 'No changes to save.' };
 

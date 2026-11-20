@@ -39,6 +39,11 @@ export const patientSidebarLinks = [
     href: '/patient/messages',
     icon: MessageSquareIcon,
   },
+  {
+    name: 'My profile',
+    href: '/patient/profile',
+    icon: UserRoundIcon,
+  },
 ];
 
 export const doctorSidebarLinks = [

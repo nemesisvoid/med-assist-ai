@@ -17,7 +17,7 @@ import {
 import KpiCard from '@/components/admin/kpi-card';
 import AppointmentsTrendChart from '@/components/admin/appointments-trend-chart';
 import StatusBreakdown from '@/components/admin/status-breakdown';
-import { AuditActionIcon, AUDIT_ACTION_META } from '@/components/admin/audit-meta';
+import { AuditActionIcon, getAuditMeta } from '@/components/admin/audit-meta';
 import { AvailabilityBadge, EmptyState, PageHeader, Panel, PanelLink, UserAvatar } from '@/components/admin/admin-ui';
 import { InviteDoctorButton } from '@/components/admin/doctor-actions';
 import {
@@ -253,9 +253,9 @@ const AdminDashboardPage = async ({ searchParams }: { searchParams: Promise<{ ra
                   <AuditActionIcon action={event.action} />
                   <div className='min-w-0 flex-1'>
                     <p className='truncate text-sm text-slate-700'>
-                      <span className='font-semibold text-slate-900'>{event.actor?.name ?? 'System'}</span> · {AUDIT_ACTION_META[event.action].label}
+                      <span className='font-semibold text-slate-900'>{event.actor?.name ?? 'System'}</span> · {getAuditMeta(event.action).label}
                     </p>
-                    {event.summary !== AUDIT_ACTION_META[event.action].label && event.summary !== 'Signed in' && event.summary !== 'Account created' && (
+                    {event.summary !== getAuditMeta(event.action).label && event.summary !== 'Signed in' && event.summary !== 'Account created' && (
                       <p className='truncate text-xs text-slate-500'>{event.summary}</p>
                     )}
                     <time
