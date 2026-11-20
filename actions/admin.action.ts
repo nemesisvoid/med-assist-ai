@@ -23,7 +23,7 @@ import {
 } from '@/validations/admin';
 import { ClinicSettingsSchema, type ClinicSettingsInput } from '@/validations/clinic';
 import { CLINIC_SETTINGS_ID, getClinicSettings } from '@/lib/clinic';
-import { SlotUnavailableError, assertSlotBookable, toBookingDate } from '@/lib/scheduling';
+import { SlotUnavailableError, assertSlotBookable, getSlotAvailability, toBookingDate } from '@/lib/scheduling';
 import { bookingDateKey } from '@/lib/clinic-hours';
 
 export type ActionResult = { ok: true; message: string } | { ok: false; error: string };
@@ -430,4 +430,45 @@ export async function updateClinicSettings(input: ClinicSettingsInput) {
     revalidatePath('/', 'layout');
     return { ok: true, message: 'Clinic settings saved.' };
   });
+}
+
+// ─── Reassign dialog: who is free at this appointment's time ───────────────────
+
+export type ReassignAvailability =
+  | { ok: true; slotLabel: string | null; unavailable: Record<string, 'booked' | 'off'> }
+  | { ok: false; error: string };
+
+/** For each assignable clinician, whether they're booked or not working at this appointment's slot. */
+export async function getReassignAvailability(appointmentId: string): Promise<ReassignAvailability> {
+  try {
+    await requireAdmin();
+    const appointment = await prisma.appointment.findUnique({
+      where: { id: String(appointmentId ?? '') },
+      select: { scheduledAt: true, scheduledTime: true },
+    });
+    if (!appointment) return { ok: false, error: 'Appointment not found.' };
+    if (!appointment.scheduledTime) return { ok: true, slotLabel: null, unavailable: {} };
+
+    const date = toBookingDate(bookingDateKey(appointment.scheduledAt));
+    const clinicians = await prisma.user.findMany({
+      where: { role: 'DOCTOR', banned: false, doctorProfile: { isNot: null }, accounts: { some: {} } },
+      select: { id: true },
+    });
+    const unavailable: Record<string, 'booked' | 'off'> = {};
+    await Promise.all(
+      clinicians.map(async ({ id }) => {
+        const day = await getSlotAvailability({ doctorId: id, date, excludeAppointmentId: appointmentId, ignorePast: true });
+        const slot = day.slots.find(s => s.time === appointment.scheduledTime);
+        if (!slot) unavailable[id] = 'off';
+        else if (slot.status === 'booked') unavailable[id] = 'booked';
+      }),
+    );
+
+    const slotLabel = `${new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(date)} at ${appointment.scheduledTime}`;
+    return { ok: true, slotLabel, unavailable };
+  } catch (error) {
+    if (error instanceof AuthorizationError) return { ok: false, error: error.message };
+    console.error('[getReassignAvailability]', error);
+    return { ok: false, error: 'Could not check availability.' };
+  }
 }

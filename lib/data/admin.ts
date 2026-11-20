@@ -9,6 +9,7 @@
  * only. Clinical content (intake forms, symptoms, SOAP notes, prescriptions) is never
  * selected here.
  */
+import { formatDoctorName } from '@/lib/utils';
 import { eachDayOfInterval, format, startOfDay, subDays } from 'date-fns';
 
 import { prisma } from '@/lib/prisma';
@@ -325,14 +326,15 @@ export async function getAssignableDoctors() {
   const doctors = await prisma.user.findMany({
     // Only doctors who can actually sign in (invite accepted) can take appointments.
     where: { role: 'DOCTOR', banned: false, doctorProfile: { isNot: null }, accounts: { some: {} } },
-    select: { id: true, name: true, doctorProfile: { select: { specialty: true, availabilityStatus: true } } },
+    select: { id: true, name: true, doctorProfile: { select: { specialty: true, availabilityStatus: true, providerType: true, credentials: true } } },
     orderBy: { name: 'asc' },
   });
   const counts = await getDoctorAppointmentCounts(doctors.map(d => d.id));
   return doctors.map(d => ({
     id: d.id,
-    name: d.name,
+    name: formatDoctorName(d.name, d.doctorProfile),
     specialty: d.doctorProfile?.specialty ?? '—',
+    providerType: d.doctorProfile?.providerType ?? 'DOCTOR',
     availability: d.doctorProfile?.availabilityStatus ?? 'OFFLINE',
     openAppointments: counts.get(d.id)?.open ?? 0,
   }));
