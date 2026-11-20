@@ -15,7 +15,7 @@ import {
   RoleBadge,
   UserAvatar,
 } from '@/components/admin/admin-ui';
-import { AuditActionIcon, AUDIT_ACTION_META } from '@/components/admin/audit-meta';
+import { AuditActionIcon, getAuditMeta } from '@/components/admin/audit-meta';
 import { UserDetailActions } from '@/components/admin/user-actions';
 import { ResendInviteButton } from '@/components/admin/doctor-actions';
 import { getUserDetail } from '@/lib/data/admin';
@@ -190,7 +190,7 @@ const UserDetailPage = async ({ params }: { params: Promise<{ id: string }> }) =
                     <AuditActionIcon action={event.action} />
                     <div className='min-w-0 flex-1'>
                       <p className='text-sm text-slate-700'>
-                        <span className='font-semibold text-slate-900'>{AUDIT_ACTION_META[event.action].label}</span>
+                        <span className='font-semibold text-slate-900'>{getAuditMeta(event.action).label}</span>
                         {event.actor && event.actor.id !== user.id && <span className='text-slate-500'> by {event.actor.name}</span>}
                       </p>
                       <p className='text-xs text-slate-500'>{event.summary}</p>

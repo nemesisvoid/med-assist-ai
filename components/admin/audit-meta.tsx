@@ -1,6 +1,8 @@
 import {
   BanIcon,
   CalendarXIcon,
+  CalendarClockIcon,
+  ScrollTextIcon,
   EyeIcon,
   VideoIcon,
   Building2Icon,
@@ -28,6 +30,8 @@ export const AUDIT_ACTION_META: Record<AuditAction, { label: string; icon: Lucid
   USER_SIGNED_UP: { label: 'Account created', icon: UserPlusIcon, tone: 'success' },
   USER_SIGNED_IN: { label: 'Signed in', icon: LogInIcon, tone: 'neutral' },
   PASSWORD_RESET: { label: 'Password reset', icon: KeyRoundIcon, tone: 'warning' },
+  PASSWORD_CHANGED: { label: 'Password changed', icon: KeyRoundIcon, tone: 'info' },
+  PASSWORD_CHANGE_FAILED: { label: 'Password change failed', icon: KeyRoundIcon, tone: 'warning' },
   USER_ROLE_CHANGED: { label: 'Role changed', icon: ShieldCheckIcon, tone: 'info' },
   USER_SUSPENDED: { label: 'Account suspended', icon: BanIcon, tone: 'danger' },
   USER_REACTIVATED: { label: 'Account reactivated', icon: UserCheckIcon, tone: 'success' },
@@ -40,12 +44,29 @@ export const AUDIT_ACTION_META: Record<AuditAction, { label: string; icon: Lucid
   APPOINTMENT_REASSIGNED: { label: 'Appointment reassigned', icon: ShuffleIcon, tone: 'info' },
   APPOINTMENT_CANCELLED: { label: 'Appointment cancelled', icon: CalendarXIcon, tone: 'danger' },
   PATIENT_RECORD_VIEWED: { label: 'Patient record viewed', icon: EyeIcon, tone: 'neutral' },
+  PATIENT_PROFILE_UPDATED: { label: 'Patient profile updated', icon: UserCheckIcon, tone: 'info' },
   ATTACHMENT_VIEWED: { label: 'Attachment viewed', icon: PaperclipIcon, tone: 'neutral' },
   MESSAGE_DELETED: { label: 'Message deleted', icon: Trash2Icon, tone: 'warning' },
   VIDEO_CALL_JOINED: { label: 'Video call joined', icon: VideoIcon, tone: 'neutral' },
   CLINIC_SETTINGS_UPDATED: { label: 'Clinic settings updated', icon: Building2Icon, tone: 'info' },
   APPOINTMENT_VISIT_TYPE_CHANGED: { label: 'Visit type changed', icon: ShuffleIcon, tone: 'info' },
+  APPOINTMENT_RESCHEDULED: { label: 'Appointment rescheduled', icon: CalendarClockIcon, tone: 'info' },
+  CLINICIAN_PROFILE_UPDATED: { label: 'Clinician profile updated', icon: StethoscopeIcon, tone: 'info' },
 };
+
+/**
+ * Label/icon for an audit action. Falls back to a readable label so an action
+ * added to the database before this map is updated can't break the admin pages.
+ */
+export function getAuditMeta(action: AuditAction) {
+  return (
+    AUDIT_ACTION_META[action] ?? {
+      label: action.charAt(0) + action.slice(1).toLowerCase().replace(/_/g, ' '),
+      icon: ScrollTextIcon,
+      tone: 'neutral' as Tone,
+    }
+  );
+}
 
 const toneStyles: Record<Tone, string> = {
   neutral: 'bg-slate-50 text-slate-600 border-slate-200',
@@ -56,7 +77,7 @@ const toneStyles: Record<Tone, string> = {
 };
 
 export const AuditActionIcon = ({ action }: { action: AuditAction }) => {
-  const { icon: Icon, tone } = AUDIT_ACTION_META[action];
+  const { icon: Icon, tone } = getAuditMeta(action);
   return (
     <span className={cn('flex size-8 shrink-0 items-center justify-center rounded-lg border', toneStyles[tone])}>
       <Icon
@@ -68,7 +89,7 @@ export const AuditActionIcon = ({ action }: { action: AuditAction }) => {
 };
 
 export const AuditActionBadge = ({ action }: { action: AuditAction }) => {
-  const { icon: Icon, tone, label } = AUDIT_ACTION_META[action];
+  const { icon: Icon, tone, label } = getAuditMeta(action);
   return (
     <span className={cn('inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold', toneStyles[tone])}>
       <Icon
