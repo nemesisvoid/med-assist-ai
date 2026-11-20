@@ -20,6 +20,8 @@ import { getClinicSettings } from '@/lib/clinic';
 import { bookingDateKey, todayInTimezone } from '@/lib/clinic-hours';
 import { SlotUnavailableError, assertSlotBookable, toBookingDate } from '@/lib/scheduling';
 import { authFailure, getSessionWithRole, requireAppointmentPatient, requireRole } from '@/lib/authz';
+import { recordAudit } from '@/lib/audit';
+import { PatientHealthProfileSchema, type PatientHealthProfileInput } from '@/validations/account';
 
 export const getPatientProfile = async () => {
   const session = await getSessionWithRole('PATIENT');
@@ -54,6 +56,7 @@ export const createPatientProfile = async (formData: z.infer<typeof PatientProfi
       },
     });
     revalidatePath('/patient/dashboard');
+    revalidatePath('/patient/profile');
     revalidatePath('/patient/appointment/create-appointment');
     return { success: true, message: 'Profile created successfully' };
   } catch (error) {
@@ -61,6 +64,83 @@ export const createPatientProfile = async (formData: z.infer<typeof PatientProfi
     if (failure) return failure;
     console.error('Error creating patient profile:', error);
     return { success: false, message: 'Failed to create profile' };
+  }
+};
+
+const HEALTH_FIELD_LABELS = {
+  genotype: 'genotype',
+  bloodGroup: 'blood group',
+  allergies: 'allergies',
+  medications: 'medications',
+  medicalHistory: 'medical history',
+  emergencyContact: 'emergency contact',
+  insuranceProvider: 'insurance provider',
+} as const;
+
+/** Changes clinicians should know about before the next visit. */
+const CLINICALLY_IMPORTANT = ['allergies', 'medications'] as const;
+
+/**
+ * A patient updates their own health details. Every change is audit-logged
+ * (field names only, never values), and if allergies or medications change, the
+ * clinicians on their open appointments are notified.
+ */
+export const updateMyPatientProfile = async (input: PatientHealthProfileInput) => {
+  try {
+    const session = await requireRole('PATIENT');
+    const parsed = PatientHealthProfileSchema.safeParse(input);
+    if (!parsed.success) return { success: false as const, message: parsed.error.issues[0]?.message ?? 'Please check the form.' };
+    const data = parsed.data;
+
+    const current = await prisma.patientProfile.findUnique({ where: { userId: session.user.id } });
+    if (!current) return { success: false as const, message: 'Create your medical profile first.' };
+
+    const changedKeys = (Object.keys(HEALTH_FIELD_LABELS) as (keyof typeof HEALTH_FIELD_LABELS)[]).filter(
+      key => (data[key] ?? null) !== (current[key] ?? null),
+    );
+    if (changedKeys.length === 0) return { success: true as const, message: 'No changes to save.' };
+
+    await prisma.patientProfile.update({ where: { userId: session.user.id }, data });
+
+    const changed = changedKeys.map(key => HEALTH_FIELD_LABELS[key]);
+    await recordAudit({
+      actorId: session.user.id,
+      action: 'PATIENT_PROFILE_UPDATED',
+      entityType: 'PatientRecord',
+      entityId: current.id,
+      summary: `Updated own health profile: ${changed.join(', ')}`,
+      metadata: { fields: changed },
+    });
+
+    const important = CLINICALLY_IMPORTANT.filter(key => changedKeys.includes(key)).map(key => HEALTH_FIELD_LABELS[key]);
+    if (important.length > 0) {
+      const appointments = await prisma.appointment.findMany({
+        where: { patientId: session.user.id, doctorId: { not: null }, status: { notIn: ['COMPLETED', 'CANCELLED'] } },
+        select: { doctorId: true },
+        distinct: ['doctorId'],
+      });
+      const what = important.join(' and ');
+      await Promise.all(
+        appointments.map(({ doctorId }) =>
+          createNotification({
+            userId: doctorId!,
+            type: 'SYSTEM',
+            title: 'Patient health details updated',
+            message: `${session.user.name} updated their ${what}. Please review before their next visit.`,
+            link: `/doctor/patients/${session.user.id}`,
+          }),
+        ),
+      );
+    }
+
+    revalidatePath('/patient/profile');
+    revalidatePath('/patient/dashboard');
+    return { success: true as const, message: 'Profile saved.' };
+  } catch (error) {
+    const failure = authFailure(error);
+    if (failure) return { ...failure, success: false as const };
+    console.error('[updateMyPatientProfile]', error);
+    return { success: false as const, message: 'Could not save your profile. Please try again.' };
   }
 };
 

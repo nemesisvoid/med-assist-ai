@@ -191,3 +191,20 @@ export function staffInviteEmail({ name, url, role }: { name: string; url: strin
     text: `Hi ${name},\n\nAn administrator created ${article} ${roleLabel} account for you on ${APP_NAME}. Set your password:\n${url}\n\nThis link expires in 1 hour. Ask your administrator to resend it if it expires.`,
   };
 }
+
+/** Security notice after a signed-in password change (so the owner notices if it wasn't them). */
+export function passwordChangedEmail({ name, when, resetUrl }: { name: string; when: string; resetUrl: string }): Omit<EmailPayload, 'to'> {
+  const safeName = escapeHtml(name);
+  const safeWhen = escapeHtml(when);
+  return {
+    subject: `Your ${APP_NAME} password was changed`,
+    html: layout({
+      heading: 'Your password was changed',
+      body: `Hi ${safeName}, the password for your ${APP_NAME} account was changed on ${safeWhen}. If this was you, there's nothing else to do.`,
+      ctaLabel: 'This wasn’t me — reset my password',
+      ctaUrl: resetUrl,
+      footnote: "If you didn't change your password, reset it right away and contact the clinic. We never ask for your password by email or phone.",
+    }),
+    text: `Hi ${name},\n\nThe password for your ${APP_NAME} account was changed on ${when}. If this was you, there's nothing else to do.\n\nIf it wasn't you, reset your password now:\n${resetUrl}`,
+  };
+}

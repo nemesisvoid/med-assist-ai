@@ -9,6 +9,7 @@ import { ClinicianProfileSchema } from '@/validations/clinician';
 import { type OpeningHours } from '@/lib/clinic-hours';
 import { cn } from '@/lib/utils';
 import WeeklyHoursEditor from '@/components/shared/weekly-hours-editor';
+import Section, { settingsInputClass as inputClass, settingsLabelClass as labelClass } from '@/components/shared/settings-section';
 
 type Availability = 'AVAILABLE' | 'BUSY' | 'OFFLINE' | 'ON_LEAVE';
 
@@ -21,31 +22,12 @@ export type ClinicianProfileFormValues = {
   workingHours: OpeningHours | null;
 };
 
-const labelClass = 'mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-500';
-const inputClass =
-  'w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-base text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 sm:text-sm aria-invalid:border-red-500';
-
 const AVAILABILITY: { value: Availability; label: string; hint: string }[] = [
   { value: 'AVAILABLE', label: 'Available', hint: 'Patients can book you' },
   { value: 'BUSY', label: 'Busy', hint: 'Shown as busy to admins' },
   { value: 'OFFLINE', label: 'Offline', hint: 'Not taking new bookings' },
   { value: 'ON_LEAVE', label: 'On leave', hint: 'Away for a while' },
 ];
-
-function Section({ title, description, icon, children }: { title: string; description: string; icon: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <section className='overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm'>
-      <header className='flex items-start gap-2.5 border-b border-slate-100 px-5 py-4'>
-        <span className='mt-0.5 text-slate-400'>{icon}</span>
-        <div>
-          <h2 className='text-sm font-bold text-slate-800'>{title}</h2>
-          <p className='mt-0.5 text-xs text-slate-500'>{description}</p>
-        </div>
-      </header>
-      <div className='grid content-start gap-4 p-5'>{children}</div>
-    </section>
-  );
-}
 
 export default function ClinicianProfileForm({
   initial,
@@ -85,7 +67,7 @@ export default function ClinicianProfileForm({
   const usesOwnHours = form.workingHours !== null;
 
   return (
-    <div className='flex flex-col gap-6 pb-24'>
+    <div className='flex flex-col gap-6'>
       <div className='grid grid-cols-1 gap-6 xl:grid-cols-2'>
         <Section title='Professional profile' description='Shown to patients when they choose a clinician.' icon={<IdCardIcon className='size-4' />}>
           <div>

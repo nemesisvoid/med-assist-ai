@@ -40,7 +40,6 @@ const PatientProfileForm = ({ userId }: { userId: string }) => {
   const onSubmit = (data: z.infer<typeof PatientProfileFormSchema>) => {
     startTransition(async () => {
       try {
-        console.log('Submitted Profile Data:', data);
         const res = await createPatientProfile(data);
         if (!res.success) {
           toast.error(res.message);
